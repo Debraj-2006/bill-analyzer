@@ -12,7 +12,7 @@ export default function Profile() {
   const [error, setError]     = useState('');
 
   useEffect(() => {
-    if (!token) { setLoading(false); setError('Not authenticated'); return; }
+    if (!token) { setTimeout(() => { setLoading(false); setError('Not authenticated'); }, 0); return; }
     fetch('http://localhost:8000/api/v1/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
     })

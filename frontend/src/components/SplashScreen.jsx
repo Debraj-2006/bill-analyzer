@@ -1,8 +1,8 @@
 // src/components/SplashScreen.jsx
 // Multi-phase cinematic intro — ~6 seconds of animation
 
-import { useEffect, useState, useRef } from 'react';
-import { motion, AnimatePresence, useAnimation } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Shield, Activity, Cpu } from 'lucide-react';
 
 // ── Config ──────────────────────────────────────────────────────
@@ -27,12 +27,6 @@ const PARTICLES = Array.from({ length: NUM_PARTICLES }, (_, i) => ({
 }));
 
 const GRID = 16;
-const CIRCUIT_PATHS = [
-  'M 0 50 L 30 50 L 30 20 L 70 20 L 70 50 L 100 50',
-  'M 0 30 L 20 30 L 20 70 L 80 70 L 80 30 L 100 30',
-  'M 50 0 L 50 30 L 20 30 L 20 80 L 50 80 L 50 100',
-  'M 50 0 L 50 40 L 80 40 L 80 60 L 50 60 L 50 100',
-];
 
 // ── Boot Terminal ────────────────────────────────────────────────
 function BootTerminal({ visible }) {
@@ -398,7 +392,6 @@ function CornerBrackets({ visible }) {
 }
 
 // ── Main Splash ──────────────────────────────────────────────────
-const PHASES = ['idle', 'grid', 'boot', 'orbit', 'converge', 'explode', 'logo', 'brand', 'loading', 'exit'];
 
 export default function SplashScreen({ onFinish }) {
   const [phase, setPhase] = useState('grid');

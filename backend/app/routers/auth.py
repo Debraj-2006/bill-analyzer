@@ -5,7 +5,7 @@ from app.core.security import get_password_hash, verify_password, create_access_
 from app.database import get_database
 from datetime import timedelta, datetime
 from app.core.config import settings
-from app.utils.otp import create_and_send_otp, verify_otp as check_otp, _normalize_mobile
+from app.utils.otp import create_and_send_otp, verify_otp as check_otp, _normalize_email
 
 router = APIRouter()
 
@@ -25,18 +25,13 @@ async def register(user: UserCreate):
 
     # Check duplicate mobile (if provided)
     if user.mobile_number:
-        mobile = _normalize_mobile(user.mobile_number)
-        existing_mobile = await db["users"].find_one({"mobile_number": mobile})
+        existing_mobile = await db["users"].find_one({"mobile_number": user.mobile_number})
         if existing_mobile:
             raise HTTPException(status_code=400, detail="Mobile number already registered")
 
     user_dict = user.model_dump()
     user_dict["hashed_password"] = get_password_hash(user_dict.pop("password"))
-
-    # Normalise mobile
-    if user_dict.get("mobile_number"):
-        user_dict["mobile_number"] = _normalize_mobile(user_dict["mobile_number"])
-    user_dict["phone_verified"] = False  # will be flipped when OTP is verified
+    user_dict["email_verified"] = False  # flipped after OTP verification
 
     await db["users"].insert_one(user_dict)
     return UserResponse(
@@ -67,7 +62,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "user_id": user["email"],
         "login_method": "email",
         "timestamp": datetime.utcnow().isoformat(),
-        "ip_address": None  # Could be added using Request object
+        "ip_address": None
     })
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -83,51 +78,58 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Mobile OTP Auth (new)
+# Email OTP Auth (replaces SMS/Fast2SMS)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/send-otp")
 async def send_otp(payload: OTPRequest):
     """
-    Send a 6-digit OTP to the provided mobile number.
-    purpose="login"    → mobile must already have an account
-    purpose="register" → mobile must NOT already have an account
+    Send a 6-digit OTP to the provided email address.
+    purpose="register" → email must NOT already have an account
+    purpose="login"    → email must already have an account (future use)
     """
     db = get_database()
-    mobile = _normalize_mobile(payload.mobile_number)
+    email = _normalize_email(payload.email)
 
-    if len(mobile) != 10 or not mobile.isdigit():
-        raise HTTPException(status_code=400, detail="Enter a valid 10-digit Indian mobile number")
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
 
-    existing = await db["users"].find_one({"mobile_number": mobile})
-
-    if payload.purpose == "login" and not existing:
-        raise HTTPException(
-            status_code=404,
-            detail="No account found with this mobile number. Please register first.",
-        )
+    existing = await db["users"].find_one({"email": email})
 
     if payload.purpose == "register" and existing:
         raise HTTPException(
             status_code=400,
-            detail="Mobile number already registered. Please login instead.",
+            detail="Email already registered. Please login instead.",
         )
 
-    await create_and_send_otp(mobile, payload.purpose)
-    return {"message": f"OTP sent to +91-{mobile}. Valid for {settings.OTP_EXPIRE_MINUTES} minutes."}
+    if payload.purpose == "login" and not existing:
+        raise HTTPException(
+            status_code=404,
+            detail="No account found with this email. Please register first.",
+        )
+
+    otp, email_sent = await create_and_send_otp(email, payload.purpose)
+
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send OTP email. Please check Gmail SMTP settings or try again later."
+        )
+
+    return {"message": f"OTP sent to {email}. Valid for {settings.OTP_EXPIRE_MINUTES} minutes."}
 
 
 @router.post("/verify-otp")
 async def verify_otp_endpoint(payload: OTPVerify):
     """
-    Verify OTP.
+    Verify OTP sent to an email.
+    - purpose="register" → confirms email is valid; frontend then calls /register.
     - purpose="login"    → returns JWT token on success.
-    - purpose="register" → confirms phone is valid; frontend then calls /register.
     """
     db = get_database()
-    mobile = _normalize_mobile(payload.mobile_number)
+    email = _normalize_email(payload.email)
 
-    is_valid = await check_otp(mobile, payload.otp, payload.purpose)
+    is_valid = await check_otp(email, payload.otp, payload.purpose)
     if not is_valid:
         raise HTTPException(
             status_code=400,
@@ -135,14 +137,14 @@ async def verify_otp_endpoint(payload: OTPVerify):
         )
 
     if payload.purpose == "login":
-        user = await db["users"].find_one({"mobile_number": mobile})
+        user = await db["users"].find_one({"email": email})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Mark phone as verified
+        # Mark email as verified
         await db["users"].update_one(
-            {"mobile_number": mobile},
-            {"$set": {"phone_verified": True}},
+            {"email": email},
+            {"$set": {"email_verified": True}},
         )
 
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -150,19 +152,17 @@ async def verify_otp_endpoint(payload: OTPVerify):
             data={
                 "sub": user["email"],
                 "name": user.get("name", ""),
-                "mobile": mobile,
+                "mobile": user.get("mobile_number", ""),
             },
             expires_delta=access_token_expires,
         )
-        # Log successful login
         await db["login_history"].insert_one({
-            "user_id": mobile,
+            "user_id": email,
             "login_method": "otp",
             "timestamp": datetime.utcnow().isoformat(),
             "ip_address": None
         })
-
         return {"access_token": access_token, "token_type": "bearer", "verified": True}
 
-    # purpose == "register" — just confirm the mobile is valid
-    return {"verified": True, "mobile_number": mobile}
+    # purpose == "register" — just confirm the email is valid
+    return {"verified": True, "email": email}

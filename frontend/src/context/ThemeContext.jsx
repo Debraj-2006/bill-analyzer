@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/context/ThemeContext.jsx
 // Provides dark/light theme toggle, persisted to localStorage.
 

@@ -25,18 +25,18 @@ class Token(BaseModel):
 
 
 class OTPRequest(BaseModel):
-    mobile_number: str
-    purpose: str = "login"  # "login" or "register"
+    email: EmailStr
+    purpose: str = "register"  # "register" or "login"
 
 
 class OTPVerify(BaseModel):
-    mobile_number: str
+    email: EmailStr
     otp: str
-    purpose: str = "login"  # "login" or "register"
+    purpose: str = "register"  # "register" or "login"
 
 
 class LoginRecord(BaseModel):
-    user_id: str  # Email or Mobile
+    user_id: str  # Email
     login_method: str  # "email" or "otp"
     timestamp: str
     ip_address: Optional[str] = None

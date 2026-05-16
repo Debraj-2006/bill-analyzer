@@ -161,7 +161,7 @@ function TypingIndicator() {
 }
 
 // ── Audio Mode Panel ──────────────────────────────────────────────────────────
-function AudioModePanel({ isRecording, isListening, transcript, onToggleRecording, supported }) {
+function AudioModePanel({ isRecording, transcript, onToggleRecording, supported }) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}

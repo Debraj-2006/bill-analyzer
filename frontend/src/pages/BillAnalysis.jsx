@@ -57,7 +57,6 @@ function StatusBadge({ hasError, isEstimated }) {
 // ── Bill Reduction Tips Component ─────────────────────────────
 function BillReductionTips({ bill }) {
   const units = bill?.units_consumed || 0;
-  const totalAmount = bill?.total_amount || 0;
   const hasError = bill?.has_error;
   const isEstimated = bill?.is_estimated;
   const [expanded, setExpanded] = useState(null);

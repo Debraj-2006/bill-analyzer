@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/context/AuthContext.jsx — Global authentication state
 import { createContext, useContext, useState, useCallback } from 'react';
 

@@ -13,10 +13,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # OTP / SMS — Twilio
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_FROM_NUMBER: str = ""   # Your Twilio phone number, e.g. +14155238886
+    # OTP / Email — Gmail SMTP
+    GMAIL_USER: str = ""
+    GMAIL_APP_PASSWORD: str = ""
     OTP_EXPIRE_MINUTES: int = 5
 
     model_config = {

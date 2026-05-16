@@ -1,6 +1,6 @@
 // src/pages/ApplianceCalculator.jsx — Premium redesign with Chart, Tips & Solar ROI
 import { useState, useCallback } from 'react';
-import { Plus, Trash2, Calculator, Loader2, CheckCircle2, Zap, Save, Lightbulb, Wind, Tv, Thermometer, Sun, TrendingDown, Leaf } from 'lucide-react';
+import { Plus, Trash2, Calculator, Loader2, CheckCircle2, Zap, Save, Lightbulb, Sun, TrendingDown, Leaf } from 'lucide-react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import api from '../api';
@@ -39,12 +39,6 @@ function calcBill(units) {
   return { slabs, energyCharge, customerCharge: CUSTOMER_CHARGE, fsc, stateDuty, total };
 }
 
-const APPLIANCE_ICONS = {
-  'LED Bulb':     <Lightbulb size={16} />,
-  'Ceiling Fan':  <Wind size={16} />,
-  'Refrigerator': <Thermometer size={16} />,
-  'Television':   <Tv size={16} />,
-};
 
 const PRESETS = [
   { name: 'LED Bulb',       wattage: 9,   hoursPerDay: 6,  daysPerMonth: 30, color: '#fbbf24' },
@@ -238,7 +232,7 @@ export default function ApplianceCalculator() {
 
             {/* Appliance rows */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {appliances.map((app, idx) => {
+              {appliances.map((app) => {
                 const kwh = ((parseFloat(app.wattage)||0)*(parseFloat(app.hoursPerDay)||0)*(parseFloat(app.daysPerMonth)||0)/1000);
                 const accentColor = app.color || '#818cf8';
                 const isHovered = hoveredId === app.id;
