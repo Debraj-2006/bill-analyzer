@@ -166,6 +166,7 @@ export default function Dashboard() {
   const [error,   setError]   = useState('');
 
   const [isOffline, setIsOffline] = useState(false);
+  const [isColdStart, setIsColdStart] = useState(false);
 
   useEffect(() => {
     const fetchBills = async () => {
@@ -173,10 +174,15 @@ export default function Dashboard() {
         const res = await api.get('/api/v1/bills/');
         setBills(res.data || []);
       } catch (err) {
-        // If the backend is offline (network error or 5xx), show the offline state.
-        // This happens when the FastAPI server is not deployed.
-        const isNetworkError = !err.response || err.response.status >= 500;
-        if (isNetworkError) {
+        // Render free tier cold start = timeout / network error with no response
+        const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+        const isNetworkError = !err.response;
+
+        if (isTimeout) {
+          setIsColdStart(true);
+          // Auto-retry after 15 seconds
+          setTimeout(() => window.location.reload(), 15000);
+        } else if (isNetworkError || err.response?.status >= 500) {
           setIsOffline(true);
         } else {
           setError(err.response?.data?.detail || 'Failed to load bills.');
@@ -187,6 +193,7 @@ export default function Dashboard() {
     };
     fetchBills();
   }, []);
+
 
   const removeBill = useCallback((id) => {
     setBills((prev) => prev.filter((b) => b._id !== id));
@@ -409,6 +416,20 @@ export default function Dashboard() {
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-400">
             <Loader2 size={40} className="animate-spin text-indigo-500" />
             <span className="font-medium tracking-wide">Syncing with server…</span>
+          </div>
+        ) : isColdStart ? (
+          <div className="text-center py-16 px-6">
+            <div className="w-20 h-20 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+              <Loader2 size={36} className="text-indigo-400 animate-spin" />
+            </div>
+            <h3 className="text-white font-bold text-xl mb-3">Server is Waking Up…</h3>
+            <p className="text-slate-400 max-w-sm mx-auto mb-2 text-sm leading-relaxed">
+              The Bill Analyzer server is starting up (Render free tier has a ~30 second cold start).
+              The page will automatically reload in a few seconds.
+            </p>
+            <p className="text-slate-500 text-xs max-w-xs mx-auto mt-4 animate-pulse">
+              Auto-refreshing in 15 seconds…
+            </p>
           </div>
         ) : isOffline ? (
           <div className="text-center py-16 px-6">

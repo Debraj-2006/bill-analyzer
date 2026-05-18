@@ -1,11 +1,14 @@
 // src/api.js — Centralized Axios instance
-// All API calls go through here so auth headers are injected automatically.
+// Points to the deployed Render backend via VITE_API_URL environment variable.
+// Falls back to localhost:8000 for local development.
 
 import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   headers: { 'Content-Type': 'application/json' },
+  // Render free tier has a cold-start delay — give it up to 30 s
+  timeout: 30000,
 });
 
 // Inject JWT token from localStorage into every request
@@ -24,7 +27,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const isLoginRequest = error.config?.url?.includes('/api/v1/auth/login');
       const isLoginPage = window.location.pathname === '/login';
-      
+
       if (!isLoginRequest && !isLoginPage) {
         localStorage.removeItem('token');
         window.location.href = '/login';
