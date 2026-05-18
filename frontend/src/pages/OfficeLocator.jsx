@@ -1,10 +1,11 @@
 // src/pages/OfficeLocator.jsx — Interactive WBSEDCL office finder with map
+// Uses static local data so it works without a deployed backend.
 
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, Search, Phone, ExternalLink, Navigation, Compass, Loader2, RefreshCw } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../api';
+import { OFFICES_DATA, haversineKm, filterOffices } from '../data/offices';
 
 export default function OfficeLocator() {
   const { isDark } = useTheme();
@@ -49,44 +50,40 @@ export default function OfficeLocator() {
   const markersRef = useRef([]);
   const userMarkerRef = useRef(null);
 
-  // Load user profile on mount to default to their registered district
+  // Load user info from the local JWT session (no backend needed)
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await api.get('/api/v1/auth/me');
-        setUserProfile(res.data);
-        if (res.data?.district) {
-          setSelectedDistrict(res.data.district);
-        }
-      } catch (err) {
-        console.error('Failed to load user profile in locator:', err);
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload?.district) setSelectedDistrict(payload.district);
+        setUserProfile(payload);
       }
-    };
-    fetchProfile();
+    } catch {
+      // no-op — profile info is optional
+    }
   }, []);
 
-  // Fetch offices from the backend on load
-  const fetchOffices = async () => {
+  // Filter offices locally — no backend call needed
+  const fetchOffices = () => {
     setLoading(true);
     setError('');
     try {
-      let url = '/api/v1/offices';
-      const params = {};
-      if (searchTerm) params.search = searchTerm;
-      if (selectedDistrict) params.district = selectedDistrict;
-      if (selectedType) params.type = selectedType;
-
-      const res = await api.get(url, { params });
-      setOffices(res.data);
+      const filtered = filterOffices(OFFICES_DATA, {
+        searchTerm,
+        district: selectedDistrict,
+        type: selectedType,
+      });
+      setOffices(filtered);
     } catch (err) {
       console.error(err);
-      setError('Could not fetch office locations. Please check your connection.');
+      setError('Could not load office data.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Re-fetch offices when search or dropdowns change
+  // Re-filter offices when search or dropdowns change
   useEffect(() => {
     fetchOffices();
   }, [searchTerm, selectedDistrict, selectedType]);
@@ -100,59 +97,49 @@ export default function OfficeLocator() {
 
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
+      (position) => {
         const { latitude, longitude } = position.coords;
         setUserCoords({ lat: latitude, lng: longitude });
 
-        try {
-          // Fetch nearest offices sorted by distance from backend
-          const res = await api.get('/api/v1/offices/nearby', {
-            params: { lat: latitude, lng: longitude, limit: 10 }
+        // Sort all offices by distance client-side — no backend needed
+        const withDistance = OFFICES_DATA.map((o) => ({
+          ...o,
+          distance_km: Math.round(haversineKm(latitude, longitude, o.lat, o.lng) * 100) / 100,
+        })).sort((a, b) => a.distance_km - b.distance_km);
+        setOffices(withDistance);
+
+        // Pan map to user's location
+        if (mapRef.current && window.L) {
+          mapRef.current.setView([latitude, longitude], 11);
+
+          if (userMarkerRef.current) {
+            mapRef.current.removeLayer(userMarkerRef.current);
+          }
+
+          const userIcon = window.L.divIcon({
+            className: 'user-pin-icon',
+            html: `<div class="relative flex items-center justify-center">
+                     <span class="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-amber-500 opacity-75"></span>
+                     <div class="relative flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-600 shadow-lg shadow-amber-500/50">
+                       <div class="h-1.5 w-1.5 rounded-full bg-white"></div>
+                     </div>
+                   </div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
           });
-          
-          setOffices(res.data);
-          
-          // Pan map to user's location
-          if (mapRef.current && window.L) {
-            mapRef.current.setView([latitude, longitude], 11);
-            
-            // Add user location marker
-            if (userMarkerRef.current) {
-              mapRef.current.removeLayer(userMarkerRef.current);
-            }
-            
-            // Neon glowing amber marker for user
-            const userIcon = window.L.divIcon({
-              className: 'user-pin-icon',
-              html: `<div class="relative flex items-center justify-center">
-                       <span class="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-amber-500 opacity-75"></span>
-                       <div class="relative flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-amber-600 shadow-lg shadow-amber-500/50">
-                         <div class="h-1.5 w-1.5 rounded-full bg-white"></div>
-                       </div>
-                     </div>`,
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
-            });
-            
-            userMarkerRef.current = window.L.marker([latitude, longitude], { icon: userIcon })
-              .addTo(mapRef.current)
-              .bindPopup('<b class="text-slate-800">You Are Here</b>')
-              .openPopup();
-          }
-        } catch (err) {
-          console.error(err);
-          alert('Failed to calculate nearby offices. Panning to your location instead.');
-          if (mapRef.current) {
-            mapRef.current.setView([latitude, longitude], 12);
-          }
-        } finally {
-          setLocating(false);
+
+          userMarkerRef.current = window.L.marker([latitude, longitude], { icon: userIcon })
+            .addTo(mapRef.current)
+            .bindPopup('<b class="text-slate-800">You Are Here</b>')
+            .openPopup();
         }
-      },
-      (error) => {
-        console.error(error);
+
         setLocating(false);
-        alert(`Location access denied or unavailable: ${error.message}`);
+      },
+      (err) => {
+        console.error(err);
+        setLocating(false);
+        alert(`Location access denied or unavailable: ${err.message}`);
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );

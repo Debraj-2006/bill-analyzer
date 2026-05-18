@@ -2,7 +2,46 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Zap, Loader2, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api from '../api';
+
+// ─── Client-side SSO verification ──────────────────────────────────────────
+// The Bill Analyzer backend may not be deployed. We verify the LokSetu SSO
+// signature entirely on the frontend using the same shared secret + SHA-256
+// algorithm. If the hash is valid and fresh (<5 min), we mint a lightweight
+// session token (pseudo-JWT) directly in the browser and log the user in.
+// ────────────────────────────────────────────────────────────────────────────
+
+const SSO_SECRET = 'loksetu-shared-secret-key-2026';
+
+async function sha256Hex(message) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function base64url(obj) {
+  return btoa(JSON.stringify(obj))
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function mintSessionToken(email, name, mobile) {
+  // Creates a pseudo-JWT that AuthContext can decode (it reads payload.sub)
+  // The signature part is intentionally a dummy — frontend never verifies it.
+  const header = base64url({ alg: 'HS256', typ: 'JWT' });
+  const payload = base64url({
+    sub: email,
+    name: name,
+    mobile: mobile || '',
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // 24 h
+  });
+  const signature = base64url({ sso: 'loksetu' });
+  return `${header}.${payload}.${signature}`;
+}
 
 export default function SSO() {
   const [searchParams] = useSearchParams();
@@ -19,23 +58,16 @@ export default function SSO() {
   const hash = searchParams.get('hash');
 
   useEffect(() => {
-    if (name) {
-      setSsoUser(name);
-    }
+    if (name) setSsoUser(name);
   }, [name]);
 
   useEffect(() => {
-    // Smooth progress bar simulation
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
+        if (prev >= 100) { clearInterval(interval); return 100; }
         return prev + 5;
       });
     }, 70);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -47,26 +79,38 @@ export default function SSO() {
       }
 
       try {
-        const { data } = await api.post('/api/v1/auth/sso-login', {
-          email,
-          name,
-          phone,
-          timestamp,
-          hash
-        });
-
-        if (data.access_token) {
-          login(data.access_token);
-          // Allow the progress bar and premium animation to finish
-          setTimeout(() => {
-            navigate('/dashboard', { replace: true });
-          }, 1800);
-        } else {
-          setError('Failed to authenticate with single sign-on.');
+        // ── 1. Verify timestamp (must be within 5 minutes) ──────────────────
+        const ts = new Date(timestamp);
+        if (isNaN(ts.getTime())) {
+          setError('Invalid SSO timestamp. Please try again from LokSetu.');
+          return;
         }
+        const ageSeconds = (Date.now() - ts.getTime()) / 1000;
+        if (ageSeconds > 300) {
+          setError('SSO token has expired (>5 min). Please click the link from LokSetu again.');
+          return;
+        }
+
+        // ── 2. Verify SHA-256 HMAC signature ────────────────────────────────
+        const msg = `${email}:${name}:${phone}:${timestamp}:${SSO_SECRET}`;
+        const expectedHash = await sha256Hex(msg);
+        if (expectedHash !== hash) {
+          setError('Invalid SSO signature. This link may have been tampered with.');
+          return;
+        }
+
+        // ── 3. Mint a frontend session token and log in ──────────────────────
+        const sessionToken = mintSessionToken(email, name, phone);
+        login(sessionToken);
+
+        // ── 4. Redirect after the animation finishes ─────────────────────────
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1800);
+
       } catch (err) {
-        console.error(err);
-        setError(err.response?.data?.detail || 'SSO authentication failed. Please login manually.');
+        console.error('SSO error:', err);
+        setError('SSO authentication failed. Please login manually.');
       }
     };
 

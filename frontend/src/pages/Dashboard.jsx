@@ -165,13 +165,22 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
+  const [isOffline, setIsOffline] = useState(false);
+
   useEffect(() => {
     const fetchBills = async () => {
       try {
         const res = await api.get('/api/v1/bills/');
         setBills(res.data || []);
       } catch (err) {
-        setError(err.response?.data?.detail || 'Failed to load bills.');
+        // If the backend is offline (network error or 5xx), show the offline state.
+        // This happens when the FastAPI server is not deployed.
+        const isNetworkError = !err.response || err.response.status >= 500;
+        if (isNetworkError) {
+          setIsOffline(true);
+        } else {
+          setError(err.response?.data?.detail || 'Failed to load bills.');
+        }
       } finally {
         setLoading(false);
       }
@@ -400,6 +409,28 @@ export default function Dashboard() {
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-400">
             <Loader2 size={40} className="animate-spin text-indigo-500" />
             <span className="font-medium tracking-wide">Syncing with server…</span>
+          </div>
+        ) : isOffline ? (
+          <div className="text-center py-16 px-6">
+            <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+              <Zap size={36} className="text-amber-400" />
+            </div>
+            <h3 className="text-white font-bold text-xl mb-3">Bill Analysis Server is Offline</h3>
+            <p className="text-slate-400 max-w-sm mx-auto mb-2 text-sm leading-relaxed">
+              The bill upload &amp; analysis backend is not yet deployed to the cloud.
+              Features like uploading bills, AI chat, and bill history need the server running.
+            </p>
+            <p className="text-slate-500 text-xs max-w-xs mx-auto mb-8">
+              The <span className="text-indigo-400 font-semibold">Office Locator</span> and <span className="text-emerald-400 font-semibold">Appliance Calculator</span> below work completely offline.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link to="/locator" className="btn-primary py-2.5 px-6 text-sm flex items-center gap-2">
+                <MapPin size={16} /> Open Office Locator
+              </Link>
+              <Link to="/calculator" className="py-2.5 px-6 text-sm flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                <Calculator size={16} /> Appliance Calculator
+              </Link>
+            </div>
           </div>
         ) : error ? (
           <div className="text-center py-20 px-6">

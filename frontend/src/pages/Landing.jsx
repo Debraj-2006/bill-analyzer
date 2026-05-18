@@ -70,7 +70,8 @@ export default function Landing() {
     if (isAuthenticated) return;
 
     const handleMessage = async (event) => {
-      if (event.origin !== 'http://localhost:5173') return;
+      const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://loksetu-5d56c.web.app'];
+      if (!allowedOrigins.includes(event.origin)) return;
 
       const { data } = event;
       if (data && data.type === 'LOKSETU_SSO_SESSION') {
@@ -387,7 +388,7 @@ export default function Landing() {
       <iframe
         src={window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
           ? 'http://localhost:5173/sso-silent'
-          : `http://${window.location.hostname}:5173/sso-silent`}
+          : 'https://loksetu-5d56c.web.app/sso-silent'}
         style={{ display: 'none' }}
         title="LokSetu SSO Silent Check"
       />

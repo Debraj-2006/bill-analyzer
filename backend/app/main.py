@@ -13,9 +13,13 @@ _allowed_origins = [
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:3000",
+    "https://loksetu-5d56c.web.app",
+    "https://wbsedcl-bill-analyzer.web.app",
+    "https://wbsedcl-bill-analyzer.firebaseapp.com",
 ]
-if _frontend_url:
+if _frontend_url and _frontend_url not in _allowed_origins:
     _allowed_origins.append(_frontend_url)
+
 
 app.add_middleware(
     CORSMiddleware,

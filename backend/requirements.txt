@@ -1,14 +1,36 @@
+# Core API framework
 fastapi==0.110.0
 uvicorn==0.27.1
-pydantic[email]
-pydantic-settings
+starlette==0.36.3
+
+# Data validation
+pydantic[email]==2.13.4
+pydantic-settings==2.14.1
+
+# MongoDB async driver
+motor==3.7.1
+pymongo==4.17.0
+dnspython==2.8.0
+
+# Auth & security
+bcrypt==5.0.0
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
 python-multipart==0.0.9
+
+# PDF processing
+pdfplumber==0.11.9
+PyMuPDF==1.27.2.3
+
+# PDF report generation
+reportlab==4.5.1
+
+# HTTP client
+httpx==0.25.2
+
+# AI (Claude)
+anthropic==0.102.0
+
+# Utilities
 python-dotenv==1.0.1
-supabase==2.4.0
-anthropic>=0.25.0
-pdfplumber>=0.10.3
-PyMuPDF>=1.24.0
-reportlab>=4.1.0
-httpx>=0.25.0,<0.26.0
-twilio>=9.0.0
-motor>=3.3.0
+email-validator==2.3.0
