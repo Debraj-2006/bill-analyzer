@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Zap, Loader2, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api';
 
 // ─── Client-side SSO verification ──────────────────────────────────────────
 // The Bill Analyzer backend may not be deployed. We verify the LokSetu SSO
@@ -91,7 +92,7 @@ export default function SSO() {
           return;
         }
 
-        // ── 2. Verify SHA-256 HMAC signature ────────────────────────────────
+        // ── 2. Verify SHA-256 HMAC signature (client-side, instant) ─────────
         const msg = `${email}:${name}:${phone}:${timestamp}:${SSO_SECRET}`;
         const expectedHash = await sha256Hex(msg);
         if (expectedHash !== hash) {
@@ -99,11 +100,29 @@ export default function SSO() {
           return;
         }
 
-        // ── 3. Mint a frontend session token and log in ──────────────────────
-        const sessionToken = mintSessionToken(email, name, phone);
-        login(sessionToken);
+        // ── 3. Exchange for a REAL backend JWT (backend is now deployed) ─────
+        // We try the backend first. If it's cold-starting, fall back to the
+        // pseudo-JWT so the user is never left stranded.
+        let sessionToken = null;
+        try {
+          const { data } = await api.post('/api/v1/auth/sso-login', {
+            email,
+            name,
+            phone,
+            timestamp,
+            hash,
+          });
+          if (data.access_token) {
+            sessionToken = data.access_token;
+          }
+        } catch (backendErr) {
+          console.warn('Backend SSO exchange failed, using client-side token:', backendErr.message);
+          // Fallback — create pseudo-JWT so the user can still browse
+          sessionToken = mintSessionToken(email, name, phone);
+        }
 
-        // ── 4. Redirect after the animation finishes ─────────────────────────
+        // ── 4. Log in and redirect ───────────────────────────────────────────
+        login(sessionToken);
         setTimeout(() => {
           navigate('/dashboard', { replace: true });
         }, 1800);
@@ -116,6 +135,7 @@ export default function SSO() {
 
     performSSO();
   }, [searchParams, login, navigate, email, name, phone, timestamp, hash]);
+
 
   return (
     <div className="flex justify-center items-center min-h-[90vh] px-4 relative overflow-hidden bg-slate-950">
