@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: bill-analyzer-api
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PROJECT_NAME
+        value: WBSEDCL Bill Analyzer
+      - key: DATABASE_NAME
+        value: bill_analyzer_db
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: OTP_EXPIRE_MINUTES
+        value: 5
+      # SECRET KEYS — fill these in on the Render dashboard:
+      - key: MONGODB_URL
+        sync: false          # marks it as secret — enter value in dashboard
+      - key: SECRET_KEY
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Set this after your Vercel deployment is live:
+      - key: FRONTEND_URL
+        sync: false

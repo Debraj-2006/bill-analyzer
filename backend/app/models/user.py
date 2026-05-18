@@ -6,7 +6,8 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
-    mobile_number: Optional[str] = None
+    mobile_number: str
+    district: Optional[str] = None
 
 
 class UserInDB(UserCreate):
@@ -16,7 +17,8 @@ class UserInDB(UserCreate):
 class UserResponse(BaseModel):
     email: EmailStr
     name: str
-    mobile_number: Optional[str] = None
+    mobile_number: str
+    district: Optional[str] = None
 
 
 class Token(BaseModel):

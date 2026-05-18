@@ -6,15 +6,17 @@ from datetime import datetime
 class ApplianceUsage(BaseModel):
     name: str
     wattage: float
-    quantity: int
+    quantity: int = 1
     hours_per_day: float
+    days_per_month: float = 30.0
 
 
 class CalculationBase(BaseModel):
-    title: str
+    title: str = "Appliance Estimate"
     appliances: List[ApplianceUsage]
     total_estimated_units: float
     estimated_monthly_cost: float
+    utility_board: str = "wbsedcl"
 
 
 class CalculationCreate(CalculationBase):
@@ -28,3 +30,4 @@ class CalculationResponse(CalculationBase):
 
     class Config:
         populate_by_name = True
+

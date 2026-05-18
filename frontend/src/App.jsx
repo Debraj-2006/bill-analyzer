@@ -20,6 +20,8 @@ import DisputeLetter       from './pages/DisputeLetter';
 import Dashboard           from './pages/Dashboard';
 import Profile             from './pages/Profile';
 import Chat               from './pages/Chat';
+import OfficeLocator       from './pages/OfficeLocator';
+import SSO                 from './pages/SSO';
 
 // Page-level fade transition
 const PageWrapper = ({ children }) => (
@@ -65,6 +67,7 @@ export default function App() {
                       <Route path="/"         element={<PageWrapper><Landing /></PageWrapper>} />
                       <Route path="/login"    element={<PageWrapper><Login /></PageWrapper>} />
                       <Route path="/register" element={<PageWrapper><Register /></PageWrapper>} />
+                      <Route path="/sso"      element={<PageWrapper><SSO /></PageWrapper>} />
 
                       {/* ── Protected routes ── */}
                       <Route
@@ -94,6 +97,10 @@ export default function App() {
                       <Route
                         path="/chat"
                         element={<ProtectedRoute><PageWrapper><Chat /></PageWrapper></ProtectedRoute>}
+                      />
+                      <Route
+                        path="/locator"
+                        element={<ProtectedRoute><PageWrapper><OfficeLocator /></PageWrapper></ProtectedRoute>}
                       />
 
                       {/* ── Fallback ── */}

@@ -1,10 +1,10 @@
-// src/pages/Landing.jsx — Public hero / landing page (Premium Enhanced)
-
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Zap, UploadCloud, CheckCircle2, FileText, TrendingDown, ArrowRight, Shield, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import heroImg from '../assets/hero.png';
+import api from '../api';
 
 // Animated stat bubble
 function StatBubble({ value, label, delay }) {
@@ -63,7 +63,40 @@ function StepCard({ step, title, desc, delay }) {
 }
 
 export default function Landing() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, login } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+
+    const handleMessage = async (event) => {
+      if (event.origin !== 'http://localhost:5173') return;
+
+      const { data } = event;
+      if (data && data.type === 'LOKSETU_SSO_SESSION') {
+        const { email, name, phone, timestamp, hash } = data;
+        try {
+          const response = await api.post('/api/v1/auth/sso-login', {
+            email,
+            name,
+            phone,
+            timestamp,
+            hash
+          });
+
+          if (response.data.access_token) {
+            login(response.data.access_token);
+            navigate('/dashboard', { replace: true });
+          }
+        } catch (err) {
+          console.error('Silent SSO login failed from landing:', err);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isAuthenticated, login, navigate]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 relative">
@@ -351,6 +384,13 @@ export default function Landing() {
       <footer className="py-12 border-t border-slate-800 text-center text-slate-500 text-sm">
         &copy; {new Date().getFullYear()} WBSEDCL Bill Intelligence Platform. Built for Consumers.
       </footer>
+      <iframe
+        src={window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'http://localhost:5173/sso-silent'
+          : `http://${window.location.hostname}:5173/sso-silent`}
+        style={{ display: 'none' }}
+        title="LokSetu SSO Silent Check"
+      />
     </div>
   );
 }

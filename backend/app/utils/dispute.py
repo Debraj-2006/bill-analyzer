@@ -28,12 +28,37 @@ def generate_dispute_letter(bill_data: dict, reason: str) -> bytes:
             y -= spacing
         return y
 
+    provider = bill_data.get("provider", "WBSEDCL")
+    if provider == "CESC":
+        recipient_lines = [
+            "The Commercial Manager,",
+            "CESC Limited,",
+            "Kolkata, West Bengal."
+        ]
+    elif provider == "WBSEDCL":
+        recipient_lines = [
+            "The Station Manager,",
+            "WBSEDCL Sub-Division Office,",
+            "West Bengal."
+        ]
+    elif provider == "IPCL":
+        recipient_lines = [
+            "The Commercial & Customer Services Head,",
+            "India Power Corporation Limited (IPCL),",
+            "Asansol/Kolkata, West Bengal."
+        ]
+    else:
+        recipient_lines = [
+            "The Customer Relations Officer / Station Manager,",
+            f"{provider},",
+            "Electricity Supply Division Office."
+        ]
+
     # Header
     y = height - margin
     y = draw_wrapped("To,", margin, y, bold=True, size=12)
-    y = draw_wrapped("The Station Manager,", margin, y, bold=True, size=12)
-    y = draw_wrapped("WBSEDCL Sub-Division Office,", margin, y, bold=True, size=12)
-    y = draw_wrapped("West Bengal.", margin, y, bold=True, size=12)
+    for line in recipient_lines:
+        y = draw_wrapped(line, margin, y, bold=True, size=12)
     
     y -= 10
     y = draw_wrapped(f"Subject: Formal Dispute Regarding Electricity Bill – Consumer ID: {bill_data.get('consumer_id', 'N/A')}", margin, y, bold=True, size=12)

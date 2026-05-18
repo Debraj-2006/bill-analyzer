@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from app.database import get_database
 from app.core.security import settings
 from app.utils.parser import parse_wbsedcl_bill
-from app.utils.tariff import calculate_wbsedcl_bill
+from app.utils.tariff import calculate_wbsedcl_bill, calculate_cesc_bill, calculate_generic_bill
 from app.utils.dispute import generate_dispute_letter
 from typing import List
 from bson import ObjectId
@@ -38,8 +38,6 @@ async def upload_bill(file: UploadFile = File(...), email: str = Depends(get_cur
         # Check if file is image or PDF
         ext = file.filename.split('.')[-1].lower()
         if ext in ['jpg', 'jpeg', 'png']:
-            # For now, we inform that image OCR is coming soon or needs a specific handler
-            # In a real app, we'd use Tesseract or an AI Vision API here.
             raise HTTPException(
                 status_code=400, 
                 detail="Image parsing is currently in beta. Please upload a PDF for the most accurate results."
@@ -49,15 +47,30 @@ async def upload_bill(file: UploadFile = File(...), email: str = Depends(get_cur
         parsed_data = parse_wbsedcl_bill(temp_path)
 
         # Analyze
-        if parsed_data.get("units_consumed"):
-            analysis = calculate_wbsedcl_bill(parsed_data["units_consumed"])
+        if parsed_data.get("units_consumed") is not None:
+            provider = parsed_data.get("provider", "WBSEDCL")
+            billed_months = parsed_data.get("billed_months", 1)
+            
+            # Route to the appropriate tariff calculator
+            if provider == "CESC":
+                analysis = calculate_cesc_bill(parsed_data["units_consumed"], months=billed_months)
+            elif provider == "WBSEDCL":
+                analysis = calculate_wbsedcl_bill(parsed_data["units_consumed"], months=billed_months)
+            else:
+                analysis = calculate_generic_bill(parsed_data["units_consumed"], months=billed_months)
+                
             parsed_data["analysis"] = analysis
 
+            # Incorporate adjustments and rebates to avoid false discrepancy warnings
+            adjustments = parsed_data.get("adjustments", 0.0)
+            rebate = parsed_data.get("rebate", 0.0)
+            expected_total = analysis["total_amount"] + adjustments - rebate
+            parsed_data["expected_amount"] = round(expected_total, 2)
+
             # Detect discrepancy
-            if parsed_data.get("total_amount") and analysis.get("total_amount"):
-                discrepancy = abs(parsed_data["total_amount"] - analysis["total_amount"])
+            if parsed_data.get("total_amount") is not None:
+                discrepancy = abs(parsed_data["total_amount"] - expected_total)
                 parsed_data["has_error"] = discrepancy > 10.0  # Error threshold
-                parsed_data["expected_amount"] = analysis["total_amount"]
             else:
                 parsed_data["has_error"] = False
         else:

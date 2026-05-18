@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Download, Loader2, AlertTriangle, Edit3, CheckCircle2, FileText } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, AlertTriangle, Edit3, CheckCircle2, FileText, MapPin } from 'lucide-react';
 import api from '../api';
 
 function buildLetterText(bill) {
@@ -10,9 +10,10 @@ function buildLetterText(bill) {
     day: '2-digit', month: 'long', year: 'numeric',
   });
 
-  const consumerNo   = bill?.consumer_no   || 'N/A';
+  const provider     = bill?.provider     || 'WBSEDCL';
+  const consumerNo   = bill?.consumer_id   || bill?.consumer_no   || 'N/A';
   const consumerName = bill?.consumer_name || 'N/A';
-  const billMonth    = bill?.bill_month    || 'N/A';
+  const billMonth    = bill?.billing_period || bill?.bill_month    || 'N/A';
   const billedAmount = bill?.total_amount  ? `₹${bill.total_amount.toFixed(2)}` : 'N/A';
   const expectedAmt  = bill?.expected_amount ? `₹${bill.expected_amount.toFixed(2)}` : 'N/A';
   const units        = bill?.units_consumed ? `${bill.units_consumed} kWh` : 'N/A';
@@ -20,15 +21,29 @@ function buildLetterText(bill) {
 
   const reason = isEstimated
     ? `The bill for the month of ${billMonth} appears to be based on an estimated meter reading rather than an actual reading. The estimated units (${units}) are significantly higher than our typical consumption pattern.`
-    : `After cross-checking the billed amount of ${billedAmount} against the official WBERC tariff slabs for ${units} units consumed, the expected amount should be approximately ${expectedAmt}. This indicates a discrepancy of ₹${
+    : `After cross-checking the billed amount of ${billedAmount} against the official ${provider} tariff slabs for ${units} units consumed, the expected amount should be approximately ${expectedAmt}. This indicates a discrepancy of ₹${
         bill?.total_amount && bill?.expected_amount
           ? Math.abs(bill.total_amount - bill.expected_amount).toFixed(2)
           : 'N/A'
       }.`;
 
-  return `The Assistant Engineer / Junior Engineer
+  const recipient = provider === 'CESC'
+    ? `The Commercial Manager
+CESC Limited – [Your Regional / District Office]
+[Your City / Town, Pin Code]`
+    : provider === 'WBSEDCL'
+    ? `The Assistant Engineer / Junior Engineer
 WBSEDCL – [Your Local Sub-Division Office]
-[Your City / Town, Pin Code]
+[Your City / Town, Pin Code]`
+    : provider === 'IPCL'
+    ? `The Commercial & Customer Services Head
+India Power Corporation Limited (IPCL) – [Your Local Sub-Division Office]
+[Your City / Town, Pin Code]`
+    : `The Customer Relations Officer / Station Manager
+${provider} – [Your Local Sub-Division Office]
+[Your City / Town, Pin Code]`;
+
+  return `${recipient}
 
 Date: ${today}
 
@@ -42,7 +57,7 @@ ${reason}
 
 In view of the above, I request your office to:
 1. Review the meter reading and verify the actual consumption against the billed units.
-2. Recalculate the bill using the official WBERC tariff schedule applicable for LT consumers.
+2. Recalculate the bill using the official ${provider} tariff schedule applicable for LT consumers.
 3. Issue a corrected bill reflecting the accurate charges at the earliest.
 
 I am prepared to cooperate fully for any meter inspection or reading verification. Please treat this as an urgent matter and inform me of the resolution at your earliest convenience.
@@ -190,6 +205,27 @@ export default function DisputeLetter() {
             {letterText}
           </pre>
         )}
+      </div>
+
+      {/* Submit Physically banner */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-indigo-600/10 border border-indigo-500/25 rounded-2xl p-6 mb-8 hover-lift glow-primary-drop transition-all">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-indigo-600/20 text-indigo-400 rounded-xl shrink-0 mt-0.5">
+            <MapPin size={22} />
+          </div>
+          <div>
+            <h4 className="text-white font-bold text-base mb-1">Prefer to Submit Physically?</h4>
+            <p className="text-slate-400 text-sm">
+              You can physically deliver this dispute letter to your nearest {bill?.provider || 'WBSEDCL'} office for immediate acknowledgement.
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/locator"
+          className="btn-primary py-2.5 px-6 text-sm shrink-0 flex items-center gap-2 whitespace-nowrap bg-indigo-600 hover:bg-indigo-500"
+        >
+          Locate Nearest Office
+        </Link>
       </div>
 
       {/* Actions footer */}

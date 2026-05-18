@@ -1,7 +1,7 @@
 // src/components/Header.jsx — Top navigation bar with theme toggle
 
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Zap, LogOut, UploadCloud, Calculator, LayoutDashboard, Menu, X, Sun, Moon, MessageCircle } from 'lucide-react';
+import { Zap, LogOut, UploadCloud, Calculator, LayoutDashboard, Menu, X, Sun, Moon, MessageCircle, MapPin } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useState } from 'react';
@@ -25,6 +25,7 @@ export default function Header() {
         { to: '/upload',    label: 'Upload Bill', icon: <UploadCloud size={16} /> },
         { to: '/calculator',label: 'Calculator',  icon: <Calculator size={16} /> },
         { to: '/chat',      label: 'BillBot',     icon: <MessageCircle size={16} /> },
+        { to: '/locator',   label: 'Locator',     icon: <MapPin size={16} /> },
       ]
     : [];
 

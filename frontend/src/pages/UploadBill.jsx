@@ -128,8 +128,8 @@ export default function UploadBill() {
           <Info size={16} className="text-indigo-400" />
         </div>
         <p className="leading-relaxed">
-          Supports WBSEDCL bills in <span className="text-indigo-300 font-medium">PDF or Image</span> formats. 
-          The analysis uses official WBERC tariff rates to ensure 100% accuracy.
+          Supports WBSEDCL and CESC bills in <span className="text-indigo-300 font-medium">PDF or Image</span> formats. 
+          The analysis uses official state tariff structures to ensure 100% accuracy.
         </p>
       </motion.div>
 

@@ -1,6 +1,6 @@
 // src/pages/ApplianceCalculator.jsx — Premium redesign with Chart, Tips & Solar ROI
 import { useState, useCallback } from 'react';
-import { Plus, Trash2, Calculator, Loader2, CheckCircle2, Zap, Save, Lightbulb, Sun, TrendingDown, Leaf } from 'lucide-react';
+import { Plus, Trash2, Calculator, Loader2, CheckCircle2, Zap, Save, Lightbulb, Sun, TrendingDown, Leaf, Sliders, Layers, Receipt, AlertTriangle } from 'lucide-react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import api from '../api';
@@ -51,8 +51,130 @@ const DEFAULTS = PRESETS.map((p, i) => ({ ...p, id: i + 1 }));
 let nextId = DEFAULTS.length + 1;
 
 function getSlabColor(index) {
-  const colors = ['#34d399', '#38bdf8', '#fbbf24', '#f87171'];
+  const colors = ['#34d399', '#38bdf8', '#fbbf24', '#f87171', '#a78bfa', '#ec4899'];
   return colors[index] || '#818cf8';
+}
+
+const SANDBOX_BOARDS = {
+  WBSEDCL: {
+    name: "WBSEDCL (State Electricity)",
+    customerCharge: 40.0,
+    dutyPct: 0.05,
+    fscPerUnit: 0.0,
+    slabs: [
+      { limit: 102, rate: 5.30, label: "0–102 kWh Tier" },
+      { limit: 180, rate: 5.97, label: "103–180 kWh Tier" },
+      { limit: 300, rate: 6.97, label: "181–300 kWh Tier" },
+      { limit: 600, rate: 7.31, label: "301–600 kWh Tier" },
+      { limit: Infinity, rate: 8.18, label: "601+ kWh Tier" },
+    ]
+  },
+  CESC: {
+    name: "CESC (Kolkata Municipal)",
+    customerCharge: 25.0, // Fixed 15 + Meter rent 10
+    dutyPct: 0.05,
+    fscPerUnit: 0.0,
+    fppasPct: 0.082,
+    slabs: [
+      { limit: 60, rate: 6.57, label: "0–60 kWh Tier" },
+      { limit: 100, rate: 7.24, label: "61–100 kWh Tier" },
+      { limit: 150, rate: 7.45, label: "101–150 kWh Tier" },
+      { limit: 300, rate: 7.62, label: "151–300 kWh Tier" },
+      { limit: Infinity, rate: 9.21, label: "301+ kWh Tier" },
+    ]
+  },
+  IPCL: {
+    name: "IPCL (Asansol / Dishergarh)",
+    customerCharge: 35.0,
+    dutyPct: 0.05,
+    fscPerUnit: 0.0,
+    slabs: [
+      { limit: 100, rate: 5.40, label: "0–100 kWh Tier" },
+      { limit: 200, rate: 6.25, label: "101–200 kWh Tier" },
+      { limit: 300, rate: 7.10, label: "201–300 kWh Tier" },
+      { limit: Infinity, rate: 8.05, label: "301+ kWh Tier" },
+    ]
+  }
+};
+
+function calcSandboxBill(providerKey, units) {
+  const board = SANDBOX_BOARDS[providerKey] || SANDBOX_BOARDS.WBSEDCL;
+  if (!units || units <= 0) {
+    return { slabs: [], energyCharge: 0, customerCharge: board.customerCharge, surcharges: 0, duty: 0, total: board.customerCharge };
+  }
+
+  let energyCharge = 0;
+  let remaining = units;
+  let prev = 0;
+  const slabsBreakdown = [];
+
+  for (const slab of board.slabs) {
+    const limit = slab.limit - prev;
+    const used = Math.min(remaining, limit);
+    if (used <= 0) break;
+    const charge = used * slab.rate;
+    slabsBreakdown.push({
+      label: slab.label,
+      units: used,
+      rate: slab.rate,
+      charge: charge,
+      maxLimit: slab.limit
+    });
+    energyCharge += charge;
+    remaining -= used;
+    prev = slab.limit;
+    if (remaining <= 0) break;
+  }
+
+  const customerCharge = board.customerCharge;
+  let surcharges = units * board.fscPerUnit;
+  if (board.fppasPct) {
+    surcharges += (energyCharge + customerCharge) * board.fppasPct;
+  }
+  
+  let duty = energyCharge * board.dutyPct;
+  if (providerKey === 'CESC' && units <= 25) {
+    duty = 0.0;
+  }
+
+  const total = energyCharge + customerCharge + surcharges + duty;
+  return {
+    slabs: slabsBreakdown,
+    energyCharge,
+    customerCharge,
+    surcharges,
+    duty,
+    total
+  };
+}
+
+function getSandboxWarning(providerKey, units) {
+  const board = SANDBOX_BOARDS[providerKey] || SANDBOX_BOARDS.WBSEDCL;
+  if (!units || units <= 0) return null;
+
+  if (providerKey === 'CESC' && units >= 20 && units <= 25) {
+    return {
+      type: 'lifeline',
+      title: '⚡ Lifeline Tariff Cliff Alert',
+      message: `You are at ${units} kWh, extremely close to the 25 kWh Lifeline threshold. Exceeding 25 kWh forfeits the flat ₹5.18 rate and 0% duty waiver, jumping to standard G tariff (₹6.57+ and 5% duty)!`,
+      color: '#fbbf24'
+    };
+  }
+
+  for (let i = 0; i < board.slabs.length - 1; i++) {
+    const slab = board.slabs[i];
+    const nextSlab = board.slabs[i + 1];
+    if (units >= slab.limit - 15 && units <= slab.limit) {
+      const excess = slab.limit - units + 1;
+      return {
+        type: 'slab_warning',
+        title: '⚠️ Tier Threshold Boundary Alert',
+        message: `You are currently consuming ${units} kWh, which is within ${slab.limit - units} units of the ${slab.limit} kWh tier boundary. Consuming ${excess} more unit${excess > 1 ? 's' : ''} will push your additional power into the higher ₹${nextSlab.rate}/unit bracket!`,
+        color: '#f87171'
+      };
+    }
+  }
+  return null;
 }
 
 export default function ApplianceCalculator() {
@@ -61,7 +183,9 @@ export default function ApplianceCalculator() {
   const [saved,      setSaved]      = useState(false);
   const [saveError,  setSaveError]  = useState('');
   const [hoveredId,  setHoveredId]  = useState(null);
-  const [activeTab,  setActiveTab]  = useState('bill'); // 'bill' | 'solar'
+  const [activeTab,  setActiveTab]  = useState('bill'); // 'bill' | 'solar' | 'sandbox'
+  const [sandboxProvider, setSandboxProvider] = useState('WBSEDCL');
+  const [sandboxUnits, setSandboxUnits] = useState(280);
   const [panelWatt,  setPanelWatt]  = useState(400);
   const [sunHours,   setSunHours]   = useState(5);
   const [costPerWatt,setCostPerWatt]= useState(50);
@@ -168,6 +292,7 @@ export default function ApplianceCalculator() {
         {[
           { id:'bill',  label:'⚡ Bill Calculator', },
           { id:'solar', label:'☀️ Solar ROI', },
+          { id:'sandbox', label:'📊 Slab Sandbox', },
         ].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
             padding:'0.5rem 1.4rem', borderRadius:'0.75rem', border:'none', cursor:'pointer',
@@ -179,6 +304,7 @@ export default function ApplianceCalculator() {
         ))}
       </div>
 
+      {activeTab === 'bill' && (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: '1.5rem' }}
           className="calc-grid">
@@ -531,6 +657,259 @@ export default function ApplianceCalculator() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ── Progressive Tariff Slab Sandbox Simulator (shown when sandbox tab active) ── */}
+      {activeTab === 'sandbox' && (() => {
+        const warning = getSandboxWarning(sandboxProvider, sandboxUnits);
+        const simBill = calcSandboxBill(sandboxProvider, sandboxUnits);
+        const board = SANDBOX_BOARDS[sandboxProvider] || SANDBOX_BOARDS.WBSEDCL;
+        
+        return (
+          <div style={{ marginTop:'1.5rem', display:'flex', flexDirection:'column', gap:'1.5rem' }}>
+            {/* Header & Board Selector */}
+            <div style={{ background:'rgba(15,23,42,0.75)', border:'1px solid rgba(71,85,105,0.4)', borderRadius:'1.25rem', padding:'1.75rem', backdropFilter:'blur(20px)' }}>
+              <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:'1rem', marginBottom:'1.5rem' }}>
+                <div>
+                  <h2 style={{ color:'#fff', fontWeight:700, fontSize:'1.25rem', marginBottom:'0.3rem', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                    <Sliders size={20} color="#38bdf8" /> Progressive Tariff Slab Sandbox Simulator
+                  </h2>
+                  <p style={{ color:'#94a3b8', fontSize:'0.85rem', maxWidth:650 }}>
+                    Adjust simulated monthly consumption to explore tiered pricing structures, fixed surcharges, and threshold cliffs across West Bengal utility boards.
+                  </p>
+                </div>
+                
+                {/* Board Selector */}
+                <div style={{ display:'flex', gap:'0.4rem', background:'rgba(2,6,23,0.5)', padding:'0.35rem', borderRadius:'0.85rem', border:'1px solid rgba(71,85,105,0.3)' }}>
+                  {Object.keys(SANDBOX_BOARDS).map(bKey => (
+                    <button
+                      key={bKey}
+                      onClick={() => setSandboxProvider(bKey)}
+                      style={{
+                        padding:'0.5rem 1rem', borderRadius:'0.65rem', border:'none', cursor:'pointer',
+                        fontSize:'0.8rem', fontWeight:600, transition:'all 0.2s',
+                        background: sandboxProvider === bKey ? 'linear-gradient(135deg, #38bdf8, #0284c7)' : 'transparent',
+                        color: sandboxProvider === bKey ? '#fff' : '#64748b',
+                        boxShadow: sandboxProvider === bKey ? '0 0 15px rgba(56,189,248,0.4)' : 'none',
+                      }}
+                    >
+                      {bKey}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Slider & Presets */}
+              <div style={{ background:'rgba(2,6,23,0.5)', border:'1px solid rgba(71,85,105,0.3)', borderRadius:'1rem', padding:'1.5rem', marginBottom:'1.5rem' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:'1rem' }}>
+                  <div>
+                    <span style={{ color:'#64748b', fontSize:'0.78rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Simulated Monthly Consumption</span>
+                    <div style={{ fontSize:'2.2rem', fontWeight:800, color:'#fff', lineHeight:1.1, marginTop:'0.2rem' }}>
+                      {sandboxUnits} <span style={{ fontSize:'1rem', fontWeight:600, color:'#38bdf8' }}>kWh</span>
+                    </div>
+                  </div>
+                  <div style={{ color:'#94a.3b8', fontSize:'0.8rem' }}>
+                    Board: <strong style={{ color:'#38bdf8' }}>{board.name}</strong>
+                  </div>
+                </div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="5"
+                  value={sandboxUnits}
+                  onChange={e => setSandboxUnits(+e.target.value)}
+                  style={{ width:'100%', accentColor:'#38bdf8', cursor:'pointer', height:8, background:'rgba(71,85,105,0.3)', borderRadius:4, marginBottom:'1.25rem' }}
+                />
+
+                {/* Quick Presets */}
+                <div style={{ display:'flex', flexWrap:'wrap', gap:'0.5rem', alignItems:'center' }}>
+                  <span style={{ fontSize:'0.75rem', color:'#64748b', fontWeight:600, marginRight:'0.5rem' }}>Quick Presets:</span>
+                  {[
+                    { label: '50 kWh (Lifeline)', value: 50 },
+                    { label: '150 kWh (Eco)', value: 150 },
+                    { label: '280 kWh (Mid)', value: 280 },
+                    { label: '450 kWh (High)', value: 450 },
+                    { label: '750 kWh (Heavy)', value: 750 },
+                  ].map(p => (
+                    <button
+                      key={p.value}
+                      onClick={() => setSandboxUnits(p.value)}
+                      style={{
+                        padding:'0.35rem 0.8rem', borderRadius:'0.5rem', border:'1px solid rgba(71,85,105,0.4)',
+                        background: sandboxUnits === p.value ? 'rgba(56,189,248,0.15)' : 'rgba(15,23,42,0.5)',
+                        color: sandboxUnits === p.value ? '#38bdf8' : '#94a3b8',
+                        fontSize:'0.75rem', fontWeight:600, cursor:'pointer', transition:'all 0.2s',
+                        borderColor: sandboxUnits === p.value ? '#38bdf8' : 'rgba(71,85,105,0.4)',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = '#38bdf8'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = sandboxUnits === p.value ? '#38bdf8' : 'rgba(71,85,105,0.4)'}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Warning Alert */}
+              {warning && (
+                <div style={{
+                  background: `${warning.color}15`, border: `1px solid ${warning.color}40`,
+                  borderRadius: '1rem', padding: '1.25rem', display: 'flex', gap: '1rem', alignItems: 'flex-start',
+                  boxShadow: `0 0 20px ${warning.color}10`,
+                }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '0.75rem', background: `${warning.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: warning.color, flexShrink: 0 }}>
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div>
+                    <h4 style={{ color: warning.color, fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.25rem' }}>{warning.title}</h4>
+                    <p style={{ color: '#cbd5e1', fontSize: '0.82rem', lineHeight: 1.5 }}>{warning.message}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Slabs Stack & Receipt Grid */}
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)', gap:'1.5rem' }} className="calc-grid">
+              
+              {/* LEFT: Slabs Stack */}
+              <div style={{ background:'rgba(15,23,42,0.75)', border:'1px solid rgba(71,85,105,0.4)', borderRadius:'1.25rem', padding:'1.75rem', backdropFilter:'blur(20px)' }}>
+                <h3 style={{ color:'#fff', fontWeight:700, fontSize:'1.05rem', marginBottom:'1.25rem', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                  <Layers size={18} color="#a78bfa" /> Tariff Tiers Breakdown
+                </h3>
+
+                <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+                  {board.slabs.map((slab, i) => {
+                    const prevLimit = i === 0 ? 0 : board.slabs[i-1].limit;
+                    const span = slab.limit === Infinity ? `${prevLimit+1}+ kWh` : `${prevLimit+1}–${slab.limit} kWh`;
+                    
+                    const item = simBill.slabs.find(s => s.label === slab.label);
+                    const isActive = item && item.units > 0;
+                    const isFull = item && item.units === (slab.limit - prevLimit);
+                    const color = getSlabColor(i);
+
+                    const capacity = slab.limit === Infinity ? 500 : (slab.limit - prevLimit);
+                    const pct = item ? Math.min((item.units / capacity) * 100, 100) : 0;
+
+                    return (
+                      <div
+                        key={slab.label}
+                        style={{
+                          background: isActive ? `${color}0c` : 'rgba(2,6,23,0.4)',
+                          border: `1px solid ${isActive ? `${color}40` : 'rgba(71,85,105,0.25)'}`,
+                          borderRadius: '1rem', padding: '1.25rem', transition: 'all 0.3s',
+                          boxShadow: isActive ? `0 0 20px ${color}10` : 'none',
+                        }}
+                      >
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
+                          <div>
+                            <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                              <span style={{ width:10, height:10, borderRadius:'50%', background: isActive ? color : '#475569', boxShadow: isActive ? `0 0 8px ${color}` : 'none' }} />
+                              <h4 style={{ color: isActive ? '#fff' : '#94a3b8', fontWeight:700, fontSize:'0.95rem' }}>{slab.label}</h4>
+                            </div>
+                            <p style={{ color:'#64748b', fontSize:'0.75rem', marginTop:'0.15rem', paddingLeft:'0.9rem' }}>{span} @ ₹{slab.rate.toFixed(2)}/unit</p>
+                          </div>
+
+                          <div style={{ textAlign:'right' }}>
+                            <span style={{
+                              fontSize:'0.7rem', fontWeight:600, padding:'0.25rem 0.65rem', borderRadius:'2rem',
+                              background: isFull ? `${color}20` : isActive ? 'rgba(56,189,248,0.15)' : 'rgba(71,85,105,0.15)',
+                              color: isFull ? color : isActive ? '#38bdf8' : '#64748b',
+                              border: `1px solid ${isFull ? `${color}40` : isActive ? 'rgba(56,189,248,0.3)' : 'rgba(71,85,105,0.3)'}`,
+                            }}>
+                              {isFull ? 'Tier Maxed' : isActive ? 'Active Tier' : 'Inactive'}
+                            </span>
+                            {isActive && (
+                              <div style={{ fontSize:'1.1rem', fontWeight:800, color:'#fff', marginTop:'0.3rem' }}>
+                                ₹{item.charge.toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div style={{ height:6, background:'rgba(71,85,105,0.25)', borderRadius:'99px', overflow:'hidden', marginBottom:'0.5rem' }}>
+                          <div style={{
+                            height:'100%', width:`${pct}%`, background: color, borderRadius:'99px',
+                            transition:'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                            boxShadow:`0 0 10px ${color}`,
+                          }} />
+                        </div>
+
+                        <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'#64748b' }}>
+                          <span>{item ? `${item.units} units used` : '0 units'}</span>
+                          <span>{slab.limit === Infinity ? 'No limit' : `${capacity} max`}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* RIGHT: Itemized Glass Receipt */}
+              <div style={{ background:'rgba(15,23,42,0.75)', border:'1px solid rgba(71,85,105,0.4)', borderRadius:'1.25rem', padding:'1.75rem', backdropFilter:'blur(20px)', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+                <div>
+                  <h3 style={{ color:'#fff', fontWeight:700, fontSize:'1.05rem', marginBottom:'1.5rem', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                    <Receipt size={18} color="#34d399" /> Simulated Itemized Receipt
+                  </h3>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'0.85rem', borderBottom:'1px solid rgba(71,85,105,0.3)' }}>
+                      <div>
+                        <p style={{ color:'#cbd5e1', fontWeight:600, fontSize:'0.85rem' }}>Base Energy Charge</p>
+                        <p style={{ color:'#64748b', fontSize:'0.75rem' }}>Sum of active tariff tiers</p>
+                      </div>
+                      <span style={{ color:'#fff', fontWeight:700, fontSize:'0.95rem' }}>₹{simBill.energyCharge.toFixed(2)}</span>
+                    </div>
+
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'0.85rem', borderBottom:'1px solid rgba(71,85,105,0.3)' }}>
+                      <div>
+                        <p style={{ color:'#cbd5e1', fontWeight:600, fontSize:'0.85rem' }}>Fixed Customer Charge / Rent</p>
+                        <p style={{ color:'#64748b', fontSize:'0.75rem' }}>Monthly board maintenance fee</p>
+                      </div>
+                      <span style={{ color:'#94a3b8', fontWeight:600, fontSize:'0.9rem' }}>₹{simBill.customerCharge.toFixed(2)}</span>
+                    </div>
+
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'0.85rem', borderBottom:'1px solid rgba(71,85,105,0.3)' }}>
+                      <div>
+                        <p style={{ color:'#cbd5e1', fontWeight:600, fontSize:'0.85rem' }}>Fixed Surcharges (FPPAS / FSC)</p>
+                        <p style={{ color:'#64748b', fontSize:'0.75rem' }}>{board.fppasPct ? `${(board.fppasPct*100).toFixed(1)}% fuel adjustment` : 'Standard fuel surcharge'}</p>
+                      </div>
+                      <span style={{ color:'#38bdf8', fontWeight:600, fontSize:'0.9rem' }}>₹{simBill.surcharges.toFixed(2)}</span>
+                    </div>
+
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:'0.85rem', borderBottom:'1px solid rgba(71,85,105,0.3)' }}>
+                      <div>
+                        <p style={{ color:'#cbd5e1', fontWeight:600, fontSize:'0.85rem' }}>Electricity Duty (5%)</p>
+                        <p style={{ color:'#64748b', fontSize:'0.75rem' }}>{sandboxProvider === 'CESC' && sandboxUnits <= 25 ? 'Waived under Lifeline' : 'Government tax'}</p>
+                      </div>
+                      <span style={{ color:'#a78bfa', fontWeight:600, fontSize:'0.9rem' }}>₹{simBill.duty.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grand Total */}
+                <div style={{
+                  marginTop: '2rem', padding: '1.5rem', borderRadius: '1rem',
+                  background: 'linear-gradient(135deg, rgba(52,211,153,0.15), rgba(16,185,129,0.05))',
+                  border: '1px solid rgba(52,211,153,0.3)', textAlign: 'center',
+                }}>
+                  <p style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Estimated Grand Total</p>
+                  <p style={{
+                    fontSize: '2.5rem', fontWeight: 900, color: '#34d399', lineHeight: 1,
+                    textShadow: '0 0 20px rgba(52,211,153,0.4)',
+                  }}>
+                    ₹{simBill.total.toFixed(2)}
+                  </p>
+                  <p style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '0.5rem' }}>Includes all applicable taxes and board surcharges</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Solar ROI Panel (shown when solar tab active) ── */}
       {activeTab === 'solar' && (

@@ -61,6 +61,9 @@ function BillReductionTips({ bill }) {
   const isEstimated = bill?.is_estimated;
   const [expanded, setExpanded] = useState(null);
 
+  const provider = bill?.provider || 'WBSEDCL';
+  const isCesc = provider === 'CESC';
+
   // Generate smart, contextual tips based on the bill data
   const tips = [];
 
@@ -72,8 +75,12 @@ function BillReductionTips({ bill }) {
       color: 'red',
       priority: 'High Priority',
       title: 'You Are in the Highest Tariff Slab',
-      shortDesc: `At ${units} units, every extra unit costs you ₹7.25+. Cutting 50 units saves ₹360+.`,
-      detail: `WBSEDCL uses a progressive slab system. With ${units} units consumed, you are paying the highest per-unit rate (₹7.25–₹8.50/unit) for units above 300. Reducing your monthly consumption by even 50–60 units can push you to a lower slab and dramatically reduce your bill. Focus on your heaviest appliances — ACs, water heaters, and refrigerators — first.`,
+      shortDesc: isCesc 
+        ? `At ${units} units, every extra unit costs you ₹9.21. Cutting 50 units saves ₹460+.`
+        : `At ${units} units, every extra unit costs you ₹7.25+. Cutting 50 units saves ₹360+.`,
+      detail: isCesc
+        ? `CESC uses a progressive slab system. With ${units} units consumed, you are paying the highest per-unit rate (₹9.21/unit) for units above 300. Reducing your consumption by even 50 units can push you back to lower tiers and dramatically reduce your bill.`
+        : `WBSEDCL uses a progressive slab system. With ${units} units consumed, you are paying the highest per-unit rate (₹7.25–₹8.50/unit) for units above 300. Reducing your monthly consumption by even 50–60 units can push you to a lower slab and dramatically reduce your bill. Focus on your heaviest appliances — ACs, water heaters, and refrigerators — first.`,
       actions: ['Set AC to 24°C or higher (saves ~15% on AC bill)', 'Use a 5-star BEE-rated AC if your unit is older than 5 years', 'Replace incandescent/CFL bulbs with LED equivalents', 'Reduce geyser usage — a solar water heater pays back in 2 years'],
     });
   } else if (units > 100 && units <= 300) {
@@ -83,8 +90,12 @@ function BillReductionTips({ bill }) {
       color: 'amber',
       priority: 'Watch Out',
       title: 'Nearing the Higher Tariff Slab',
-      shortDesc: `You are at ${units} units. Crossing 300 units significantly increases your per-unit cost.`,
-      detail: `You are currently in the 101–300 unit slab (₹6.50/unit). If your usage crosses 300 units, all additional units are billed at the premium rate of ₹7.25+. Be mindful during summer months when AC usage spikes. Tracking your usage mid-month can help you stay within the lower slab.`,
+      shortDesc: isCesc
+        ? `You are at ${units} units. Crossing 300 units significantly increases your per-unit cost to ₹9.21.`
+        : `You are at ${units} units. Crossing 300 units significantly increases your per-unit cost.`,
+      detail: isCesc
+        ? `You are currently in the mid-range CESC G tariff slabs (₹7.24–₹7.62/unit). If your usage crosses 300 units, all additional units are billed at the premium rate of ₹9.21. Be mindful during summer months when AC usage spikes. Tracking your usage mid-month can help you stay within the lower slab.`
+        : `You are currently in the 101–300 unit slab (₹6.50/unit). If your usage crosses 300 units, all additional units are billed at the premium rate of ₹7.25+. Be mindful during summer months when AC usage spikes. Tracking your usage mid-month can help you stay within the lower slab.`,
       actions: ['Monitor your sub-meter or use a smart plug to track usage', 'Avoid running multiple high-power appliances simultaneously', 'Pre-cool rooms before peak hour (6 PM – 10 PM) to reduce AC load'],
     });
   } else {
@@ -94,8 +105,12 @@ function BillReductionTips({ bill }) {
       color: 'emerald',
       priority: 'Good Standing',
       title: 'Efficient Consumption — Stay in This Range',
-      shortDesc: `At ${units} units, you are in the lowest tariff slab. Maintain this for maximum savings.`,
-      detail: `You are consuming ${units} units, which keeps you in the economical first slab (0–100 units at ₹5/unit). This is excellent. Your main goal should be to stay below 100 units consistently. Ensure any new appliances purchased are 4 or 5-star BEE rated.`,
+      shortDesc: isCesc
+        ? `At ${units} units, you are in the economical lower slabs. Maintain this for maximum savings.`
+        : `At ${units} units, you are in the lowest tariff slab. Maintain this for maximum savings.`,
+      detail: isCesc
+        ? `You are consuming ${units} units, which keeps you in CESC's lower tiers (0–60 units @ ₹6.57, or G-LL Life Line @ ₹5.18 if under 25 units/month). This is excellent. Maintain these energy-conscious habits.`
+        : `You are consuming ${units} units, which keeps you in the economical first slab (0–100 units at ₹5/unit). This is excellent. Your main goal should be to stay below 100 units consistently. Ensure any new appliances purchased are 4 or 5-star BEE rated.`,
       actions: ['Great job! Continue your energy-conscious habits', 'Consider a solar panel even at this level — the ROI is excellent', 'Check if any appliances on standby are silently consuming power'],
     });
   }
@@ -125,7 +140,7 @@ function BillReductionTips({ bill }) {
     priority: 'Quick Win',
     title: 'Shift High-Power Tasks to Off-Peak Hours',
     shortDesc: 'Running washing machines, irons, and geysers during daytime reduces grid stress and your bill.',
-    detail: 'Although WBSEDCL does not currently mandate Time-of-Use (ToU) billing for domestic consumers, shifting high-energy tasks like laundry, ironing, and water heating to daytime hours (9 AM – 5 PM) has two benefits: (1) If you have solar panels, you consume your own free solar power instead of grid power. (2) It reduces peak demand, which helps the overall grid stability. Future billing reforms may reward off-peak usage.',
+    detail: `Although ${provider} does not currently mandate Time-of-Use (ToU) billing for domestic consumers, shifting high-energy tasks like laundry, ironing, and water heating to daytime hours (9 AM – 5 PM) has two benefits: (1) If you have solar panels, you consume your own free solar power instead of grid power. (2) It reduces peak demand, which helps the overall grid stability. Future billing reforms may reward off-peak usage.`,
     actions: [
       'Run the washing machine and dishwasher in the morning',
       'Use a solar water heater — saves 1,500–2,000 units/year',
@@ -146,7 +161,7 @@ function BillReductionTips({ bill }) {
     actions: [
       'Apply at pmsuryaghar.gov.in for subsidy (free registration)',
       'Get at least 3 quotes from WBREDA empanelled vendors',
-      'Apply for WBSEDCL net metering along with solar installation',
+      `Apply for ${provider} net metering along with solar installation`,
       'Ensure your sanctioned load (kVA) is sufficient for the system size',
     ],
   });
@@ -177,10 +192,10 @@ function BillReductionTips({ bill }) {
       priority: '🚨 Action Required',
       title: 'Billing Error Detected — File a Dispute Now',
       shortDesc: 'Our audit found a discrepancy. You may be overpaying. Download the dispute letter.',
-      detail: 'A calculation discrepancy was detected in this bill. This could be due to incorrect tariff slab application, wrong meter reading, or an erroneous surcharge. You have the legal right under the Electricity Act 2003 to dispute this bill. Download the pre-filled dispute letter and submit it to your local WBSEDCL sub-divisional office. Keep a copy of the bill and this report.',
+      detail: `A calculation discrepancy was detected in this bill. This could be due to incorrect tariff slab application, wrong meter reading, or an erroneous surcharge. You have the legal right under the Electricity Act 2003 to dispute this bill. Download the pre-filled dispute letter and submit it to your local ${provider} office. Keep a copy of the bill and this report.`,
       actions: [
         'Download and sign the dispute letter (button below)',
-        'Submit to your local WBSEDCL Sub-Division Office',
+        `Submit to your local ${provider} Office`,
         'Request an actual meter reading if you received an estimated bill',
         'Follow up within 30 days if no response is received',
       ],
@@ -195,10 +210,10 @@ function BillReductionTips({ bill }) {
       priority: '⚠️ Action Required',
       title: 'Estimated Reading — Request an Actual Meter Read',
       shortDesc: 'Estimated bills are often higher than actual consumption. Request a correction.',
-      detail: 'This bill was generated on an estimated meter reading, meaning WBSEDCL did not physically read your meter this month. Estimated bills are calculated using your historical average, which may be higher than your actual consumption. You have the right to request an actual meter reading and a revised bill. Visit your local WBSEDCL customer service center or submit a request through the WBSEDCL online portal.',
+      detail: `This bill was generated on an estimated meter reading, meaning ${provider} did not physically read your meter this month. Estimated bills are calculated using your historical average, which may be higher than your actual consumption. You have the right to request an actual meter reading and a revised bill. Visit your local ${provider} customer service center or submit a request through their online portal.`,
       actions: [
-        'Visit your WBSEDCL customer care center with your meter reading',
-        'Submit the actual reading via the WBSEDCL self-service portal',
+        `Visit your ${provider} customer care center with your meter reading`,
+        `Submit the actual reading via the ${provider} self-service portal`,
         'Take a photograph of your meter with date/time stamp as proof',
         'Request a corrected bill after actual reading is recorded',
       ],
@@ -431,16 +446,21 @@ export default function BillAnalysis() {
           </div>
 
           <div className="space-y-1">
+            <DataRow label="Electricity Provider" value={bill?.provider || 'WBSEDCL'} delay={0.15} />
             <DataRow label="Consumer Name" value={bill?.consumer_name} delay={0.2} />
-            <DataRow label="Consumer No." value={bill?.consumer_no} delay={0.25} />
-            <DataRow label="Bill Month" value={bill?.bill_month} delay={0.3} />
+            <DataRow label="Consumer ID / No." value={bill?.consumer_id || bill?.consumer_no} delay={0.25} />
+            {bill?.customer_id && <DataRow label="Customer ID" value={bill.customer_id} delay={0.27} />}
+            <DataRow label="Billing Period" value={bill?.billing_period || bill?.bill_month} delay={0.3} />
+            <DataRow label="Billed Months" value={bill?.billed_months ? `${bill.billed_months} Month(s)` : '1 Month'} delay={0.32} />
             <DataRow label="Units Consumed" value={bill?.units_consumed ? `${bill.units_consumed} kWh` : null} delay={0.35} />
             <DataRow label="Meter Reading" value={bill?.meter_reading} delay={0.4} />
+            {bill?.adjustments !== undefined && bill.adjustments > 0 && <DataRow label="Adjustments / Arrears" value={`₹${bill.adjustments.toFixed(2)}`} delay={0.42} />}
+            {bill?.rebate !== undefined && bill.rebate > 0 && <DataRow label="Rebate" value={`₹${bill.rebate.toFixed(2)}`} delay={0.44} />}
             <DataRow
               label="Reading Type"
               value={bill?.is_estimated ? 'ESTIMATED ⚠️' : 'ACTUAL'}
               highlight={bill?.is_estimated}
-              delay={0.45}
+              delay={0.46}
             />
             <DataRow 
               label="Billed Amount" 
@@ -478,15 +498,35 @@ export default function BillAnalysis() {
           </div>
 
           <div className="space-y-1 relative z-10">
-            <DataRow label="Energy Charge (Calculated)" value={a.energy_charge ? `₹${a.energy_charge?.toFixed(2)}` : null} delay={0.3} />
-            <DataRow label="Customer Charge" value={a.customer_charge ? `₹${a.customer_charge?.toFixed(2)}` : null} delay={0.35} />
-            <DataRow label="Fuel Surcharge (FSC)" value={a.fsc ? `₹${a.fsc?.toFixed(2)}` : null} delay={0.4} />
-            <DataRow label="State Duty (5%)" value={a.state_duty ? `₹${a.state_duty?.toFixed(2)}` : null} delay={0.45} />
+            <DataRow label="Energy Charge (Calculated)" value={a.energy_charge !== undefined ? `₹${a.energy_charge?.toFixed(2)}` : null} delay={0.3} />
+            
+            {bill?.provider === 'CESC' ? (
+              <>
+                <DataRow label="Fixed Charge" value={a.fixed_charge !== undefined ? `₹${a.fixed_charge?.toFixed(2)}` : null} delay={0.32} />
+                <DataRow label="Meter Rent" value={a.meter_rent !== undefined ? `₹${a.meter_rent?.toFixed(2)}` : null} delay={0.34} />
+                <DataRow label="FPPAS (Fuel Adj.)" value={a.fppas !== undefined ? `₹${a.fppas?.toFixed(2)}` : null} delay={0.36} />
+                <DataRow label="Electricity Duty" value={a.electricity_duty !== undefined ? `₹${a.electricity_duty?.toFixed(2)}` : null} delay={0.38} />
+              </>
+            ) : (
+              <>
+                <DataRow label="Customer Charge" value={a.customer_charge !== undefined ? `₹${a.customer_charge?.toFixed(2)}` : null} delay={0.35} />
+                <DataRow label="Fuel Surcharge (FSC)" value={a.fsc !== undefined ? `₹${a.fsc?.toFixed(2)}` : null} delay={0.4} />
+                <DataRow label="State Duty" value={a.state_duty !== undefined ? `₹${a.state_duty?.toFixed(2)}` : null} delay={0.45} />
+              </>
+            )}
+
+            {bill?.adjustments !== undefined && bill.adjustments > 0 && (
+              <DataRow label="Adjustments (Add)" value={`+₹${bill.adjustments.toFixed(2)}`} delay={0.46} />
+            )}
+            {bill?.rebate !== undefined && bill.rebate > 0 && (
+              <DataRow label="Rebate (Subtract)" value={`-₹${bill.rebate.toFixed(2)}`} delay={0.48} />
+            )}
+            
             <div className="h-px bg-slate-800 my-4" />
-            <DataRow label="Recalculated Total" value={bill?.expected_amount ? `₹${bill.expected_amount?.toFixed(2)}` : null} delay={0.5} />
+            <DataRow label="Recalculated Total" value={bill?.expected_amount !== undefined ? `₹${bill.expected_amount?.toFixed(2)}` : null} delay={0.5} />
             <DataRow
               label="Original Bill Total"
-              value={bill?.total_amount ? `₹${bill.total_amount?.toFixed(2)}` : null}
+              value={bill?.total_amount !== undefined ? `₹${bill.total_amount?.toFixed(2)}` : null}
               highlight={bill?.has_error}
               delay={0.55}
             />
@@ -504,7 +544,7 @@ export default function BillAnalysis() {
                   Overcharged by ₹{discrepancyAmount}
                 </div>
                 <p className="text-red-300/70 text-sm leading-relaxed">
-                  Our audit indicates your bill is inflated by ₹{discrepancyAmount} compared to official WBSEDCL tariff structures for this billing period.
+                  Our audit indicates your bill is inflated by ₹{discrepancyAmount} compared to official {bill?.provider || 'WBSEDCL'} tariff structures for this billing period.
                 </p>
               </motion.div>
             )}
@@ -615,7 +655,7 @@ export default function BillAnalysis() {
         <div className="flex items-center gap-2 mb-2 text-slate-400 font-bold uppercase tracking-widest">
           <Info size={14} /> Disclaimer
         </div>
-        This analysis is generated based on the latest published WBSEDCL tariff structures by WBERC. While our engine is 99% accurate, always verify with an official representative before pursuing legal action. The generated dispute letter is a template and should be reviewed.
+        This analysis is generated based on the latest published {bill?.provider || 'WBSEDCL'} tariff structures by WBERC. While our engine is 99% accurate, always verify with an official representative before pursuing legal action. The generated dispute letter is a template and should be reviewed.
       </div>
     </motion.div>
   );

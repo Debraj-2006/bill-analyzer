@@ -38,6 +38,7 @@ async def register(user: UserCreate):
         email=user.email,
         name=user.name,
         mobile_number=user_dict.get("mobile_number"),
+        district=user_dict.get("district"),
     )
 
 
@@ -74,7 +75,83 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         email=current_user["email"],
         name=current_user["name"],
         mobile_number=current_user.get("mobile_number"),
+        district=current_user.get("district"),
     )
+
+
+from pydantic import BaseModel
+
+class SSOLoginRequest(BaseModel):
+    email: str
+    name: str
+    phone: str = ""
+    timestamp: str
+    hash: str
+
+@router.post("/sso-login", response_model=Token)
+async def sso_login(payload: SSOLoginRequest):
+    import hashlib
+    # Shared secret
+    secret = "loksetu-shared-secret-key-2026"
+    
+    # Verify signature
+    msg = f"{payload.email}:{payload.name}:{payload.phone}:{payload.timestamp}:{secret}"
+    expected_hash = hashlib.sha256(msg.encode()).hexdigest()
+    
+    if payload.hash != expected_hash:
+        raise HTTPException(status_code=400, detail="Invalid SSO signature")
+        
+    # Verify timestamp (5 minutes limit)
+    try:
+        ts = datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00'))
+        if ts.tzinfo is not None:
+            ts = ts.astimezone(None).replace(tzinfo=None)
+        diff = abs((datetime.now() - ts).total_seconds())
+        if diff > 300:
+            raise HTTPException(status_code=400, detail="SSO token has expired")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"SSO timestamp validation error: {str(e)}")
+        
+    db = get_database()
+    user = await db["users"].find_one({"email": payload.email})
+    if not user:
+        # Seamlessly auto-register user on first single sign-on link click!
+        new_user = {
+            "email": payload.email,
+            "name": payload.name,
+            "hashed_password": get_password_hash("loksetusso2026"),
+            "mobile_number": payload.phone if payload.phone else None,
+            "district": "Kolkata",
+            "email_verified": True
+        }
+        await db["users"].insert_one(new_user)
+        user = new_user
+    else:
+        # Seamlessly update name and mobile_number to stay perfectly in sync with LokSetu profile
+        update_fields = {}
+        if user.get("name") != payload.name:
+            update_fields["name"] = payload.name
+        if payload.phone and user.get("mobile_number") != payload.phone:
+            update_fields["mobile_number"] = payload.phone
+            
+        if update_fields:
+            await db["users"].update_one({"email": payload.email}, {"$set": update_fields})
+            user = await db["users"].find_one({"email": payload.email})
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["email"], "name": user.get("name", ""), "mobile": user.get("mobile_number", "")},
+        expires_delta=access_token_expires,
+    )
+    
+    await db["login_history"].insert_one({
+        "user_id": user["email"],
+        "login_method": "sso_loksetu",
+        "timestamp": datetime.utcnow().isoformat(),
+        "ip_address": None
+    })
+    
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

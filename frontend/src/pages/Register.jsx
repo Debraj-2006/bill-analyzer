@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   User, Lock, Mail, AlertCircle, Loader2, Zap,
-  CheckCircle2, Phone, ArrowRight
+  CheckCircle2, Phone, ArrowRight, MapPin
 } from 'lucide-react';
 import api from '../api';
 
@@ -18,6 +18,30 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
+  const [district, setDistrict] = useState('');
+
+  const districtsOfWB = [
+    'North 24 Parganas',
+    'South 24 Parganas',
+    'Howrah',
+    'Hooghly',
+    'Purba Medinipur',
+    'Paschim Medinipur',
+    'Purba Bardhaman',
+    'Paschim Bardhaman',
+    'Nadia',
+    'Murshidabad',
+    'Malda',
+    'Darjeeling',
+    'Jalpaiguri',
+    'Cooch Behar',
+    'Birbhum',
+    'Bankura',
+    'Purulia'
+  ];
+
+
+
 
   /* ── Register account ────────────────────────────────── */
   const handleRegister = async (e) => {
@@ -35,7 +59,8 @@ export default function Register() {
         name,
         email,
         password,
-        mobile_number: mobile || undefined,
+        mobile_number: mobile,
+        district,
       });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
@@ -136,7 +161,7 @@ export default function Register() {
 
           <div>
             <label htmlFor="reg-mobile" className="block text-sm font-medium text-slate-300 mb-2">
-              Mobile Number <span className="text-slate-500 text-xs">(optional)</span>
+              Mobile Number
             </label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-3 flex items-center gap-1 pointer-events-none">
@@ -152,7 +177,38 @@ export default function Register() {
                 onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 className="glass-input w-full !pl-16"
                 placeholder="98765 43210"
+                required
               />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="reg-district" className="block text-sm font-medium text-slate-300 mb-2">
+              District
+            </label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                <MapPin size={18} />
+              </div>
+              <select
+                id="reg-district"
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+                className="glass-input w-full !pl-11 pr-8 appearance-none text-slate-300 bg-slate-900/60"
+                required
+              >
+                <option value="" disabled className="bg-slate-900 text-slate-400">Select your District</option>
+                {districtsOfWB.map((d) => (
+                  <option key={d} value={d} className="bg-slate-900 text-slate-200">
+                    {d}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-500">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
           </div>
 

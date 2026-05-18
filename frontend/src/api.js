@@ -4,7 +4,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -17,13 +17,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to /login on 401 Unauthorized
+// Redirect to /login on 401 Unauthorized, except when authenticating
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      const isLoginRequest = error.config?.url?.includes('/api/v1/auth/login');
+      const isLoginPage = window.location.pathname === '/login';
+      
+      if (!isLoginRequest && !isLoginPage) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
