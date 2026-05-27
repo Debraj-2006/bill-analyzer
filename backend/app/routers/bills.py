@@ -89,6 +89,8 @@ async def upload_bill(file: UploadFile = File(...), email: str = Depends(get_cur
 
         return bill_record
 
+    except ValueError as ve:
+        raise HTTPException(status_code=422, detail=str(ve))
     except HTTPException as he:
         raise he
     except Exception as e:

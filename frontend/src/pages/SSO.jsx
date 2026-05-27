@@ -2,47 +2,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Zap, Loader2, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api from '../api';
 
-// ─── Client-side SSO verification ──────────────────────────────────────────
-// The Bill Analyzer backend may not be deployed. We verify the LokSetu SSO
-// signature entirely on the frontend using the same shared secret + SHA-256
-// algorithm. If the hash is valid and fresh (<5 min), we mint a lightweight
-// session token (pseudo-JWT) directly in the browser and log the user in.
+// ─── Backend SSO verification ────────────────────────────────────────────────
+// Send the SSO details to the backend to get a real signed JWT.
 // ────────────────────────────────────────────────────────────────────────────
-
-const SSO_SECRET = 'loksetu-shared-secret-key-2026';
-
-async function sha256Hex(message) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-function base64url(obj) {
-  return btoa(JSON.stringify(obj))
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-function mintSessionToken(email, name, mobile) {
-  // Creates a pseudo-JWT that AuthContext can decode (it reads payload.sub)
-  // The signature part is intentionally a dummy — frontend never verifies it.
-  const header = base64url({ alg: 'HS256', typ: 'JWT' });
-  const payload = base64url({
-    sub: email,
-    name: name,
-    mobile: mobile || '',
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // 24 h
-  });
-  const signature = base64url({ sso: 'loksetu' });
-  return `${header}.${payload}.${signature}`;
-}
 
 export default function SSO() {
   const [searchParams] = useSearchParams();
@@ -80,49 +43,26 @@ export default function SSO() {
       }
 
       try {
-        // ── 1. Verify timestamp (must be within 5 minutes) ──────────────────
-        const ts = new Date(timestamp);
-        if (isNaN(ts.getTime())) {
-          setError('Invalid SSO timestamp. Please try again from LokSetu.');
-          return;
-        }
-        const ageSeconds = (Date.now() - ts.getTime()) / 1000;
-        if (ageSeconds > 300) {
-          setError('SSO token has expired (>5 min). Please click the link from LokSetu again.');
-          return;
-        }
+        // ── 1. Call Backend SSO Endpoint ───────────────────────────────────────
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiUrl}/api/v1/auth/sso-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name, phone, timestamp, hash })
+        });
 
-        // ── 2. Verify SHA-256 HMAC signature (client-side, instant) ─────────
-        const msg = `${email}:${name}:${phone}:${timestamp}:${SSO_SECRET}`;
-        const expectedHash = await sha256Hex(msg);
-        if (expectedHash !== hash) {
-          setError('Invalid SSO signature. This link may have been tampered with.');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          setError(errorData.detail || 'SSO authentication failed on the server.');
           return;
         }
 
-        // ── 3. Exchange for a REAL backend JWT (backend is now deployed) ─────
-        // We try the backend first. If it's cold-starting, fall back to the
-        // pseudo-JWT so the user is never left stranded.
-        let sessionToken = null;
-        try {
-          const { data } = await api.post('/api/v1/auth/sso-login', {
-            email,
-            name,
-            phone,
-            timestamp,
-            hash,
-          });
-          if (data.access_token) {
-            sessionToken = data.access_token;
-          }
-        } catch (backendErr) {
-          console.warn('Backend SSO exchange failed, using client-side token:', backendErr.message);
-          // Fallback — create pseudo-JWT so the user can still browse
-          sessionToken = mintSessionToken(email, name, phone);
-        }
+        const data = await response.json();
+        
+        // ── 2. Log in with the real backend JWT ────────────────────────────────
+        login(data.access_token);
 
-        // ── 4. Log in and redirect ───────────────────────────────────────────
-        login(sessionToken);
+        // ── 4. Redirect after the animation finishes ─────────────────────────
         setTimeout(() => {
           navigate('/dashboard', { replace: true });
         }, 1800);
@@ -135,7 +75,6 @@ export default function SSO() {
 
     performSSO();
   }, [searchParams, login, navigate, email, name, phone, timestamp, hash]);
-
 
   return (
     <div className="flex justify-center items-center min-h-[90vh] px-4 relative overflow-hidden bg-slate-950">

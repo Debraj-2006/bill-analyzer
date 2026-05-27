@@ -7,10 +7,10 @@ def parse_cesc_bill(text: str) -> Dict[str, Any]:
     """
     Dedicated parsing logic for CESC (Calcutta Electric Supply Corporation) bills.
     """
-    # 1. Consumer No (11 digits, like 48255077056)
+    # 1. Consumer No (9 to 12 digits)
     consumer_id_match = (
-        re.search(r"(?:Consumer\s*No|Consumer\s*No\.|Consumer\s*Number|Con\s*No)\s*[:\.-]?\s*(\d{11})", text, re.IGNORECASE) or
-        re.search(r"\b\d{11}\b", text)  # standalone 11 digits
+        re.search(r"(?:Consumer\s*No|Consumer\s*No\.|Consumer\s*Number|Con\s*No)\s*[:\.-]?\s*(\d{9,12})", text, re.IGNORECASE) or
+        re.search(r"\b\d{9,12}\b", text)
     )
     
     # 2. Customer ID (11 digits, like 48001814701)
@@ -31,13 +31,15 @@ def parse_cesc_bill(text: str) -> Dict[str, Any]:
     units_match = (
         re.search(r"Units\s+Billed\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE) or
         re.search(r"Units\s+Consumed\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE) or
-        re.search(r"Consumed\s+Biled\s+Charges.*\n.*?\s+(\d+)\s+\d+(?:\.\d+)?\s*$", text, re.IGNORECASE)
+        re.search(r"Consumed\s+Biled\s+Charges.*\n.*?\s+(\d+)\s+\d+(?:\.\d+)?\s*$", text, re.IGNORECASE) or
+        re.search(r"(?:Units|Consumption|KWH)\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
     )
 
     # 6. Total Amount
     amount_match = (
         re.search(r"Net\s+Amount\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE) or
-        re.search(r"Net\s+Payable\s*Amount\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
+        re.search(r"Net\s+Payable\s*Amount\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE) or
+        re.search(r"(?:Total\s*Payable|Amount\s*Payable|Bill\s*Amount)\s*[:\.-]?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
     )
 
     # 7. Reading Status
@@ -85,19 +87,26 @@ def parse_cesc_bill(text: str) -> Dict[str, Any]:
 
     results = {
         "provider": "CESC",
-        "consumer_id": consumer_id_match.group(1).strip() if (consumer_id_match and len(consumer_id_match.groups()) > 0) else (consumer_id_match.group(0).strip() if consumer_id_match else "48255077056"),
-        "customer_id": customer_id_match.group(1).strip() if customer_id_match else "48001814701",
-        "consumer_name": name_match.group(1).strip() if name_match else "BANI DAS",
-        "billing_period": billing_period_match.group(1).strip() if billing_period_match else "February 2026",
-        "units_consumed": float(units_match.group(1)) if units_match else 8.0,
-        "total_amount": float(amount_match.group(1)) if amount_match else 138.88,
+        "consumer_id": consumer_id_match.group(1).strip() if (consumer_id_match and len(consumer_id_match.groups()) > 0) else (consumer_id_match.group(0).strip() if consumer_id_match else None),
+        "customer_id": customer_id_match.group(1).strip() if customer_id_match else "",
+        "consumer_name": name_match.group(1).strip() if name_match else "Valued Consumer",
+        "billing_period": billing_period_match.group(1).strip() if billing_period_match else "Current Cycle",
+        "units_consumed": float(units_match.group(1)) if units_match else None,
+        "total_amount": float(amount_match.group(1)) if amount_match else None,
         "reading_status": reading_status,
         "due_date": due_date_str,
         "billed_months": billed_months,
-        "meter_reading": meter_reading or 11,
+        "meter_reading": meter_reading or None,
         "adjustments": adjustments,
         "rebate": rebate
     }
+
+    if not results["consumer_id"]:
+        raise ValueError("Could not extract Consumer ID from the CESC bill.")
+    if results["units_consumed"] is None:
+        raise ValueError("Could not extract Units Consumed from the CESC bill.")
+    if results["total_amount"] is None:
+        raise ValueError("Could not extract Total Amount from the CESC bill.")
 
     results["consumer_no"] = results["consumer_id"]
     results["bill_month"] = results["billing_period"]
@@ -114,7 +123,7 @@ def parse_generic_bill(text: str, detected_provider: str) -> Dict[str, Any]:
     if not consumer_id_match:
         consumer_id_match = re.search(r"\b\d{9,12}\b", text)
         
-    consumer_id = consumer_id_match.group(1).strip() if (consumer_id_match and len(consumer_id_match.groups()) > 0) else (consumer_id_match.group(0).strip() if consumer_id_match else "998877665")
+    consumer_id = consumer_id_match.group(1).strip() if (consumer_id_match and len(consumer_id_match.groups()) > 0) else (consumer_id_match.group(0).strip() if consumer_id_match else None)
 
     # 2. Customer ID
     customer_id_match = re.search(r"(?:Customer\s*(?:ID|No|Number|Code))[\s\.:-]*(\d+)", text, re.IGNORECASE)
@@ -134,11 +143,11 @@ def parse_generic_bill(text: str, detected_provider: str) -> Dict[str, Any]:
 
     # 5. Units Consumed
     units_match = re.search(r"(?:Units\s*(?:Consumed|Billed|Charged)|Energy\s*Consumed|Consumption|Units|KWH)[\s\.:-]*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
-    units_consumed = float(units_match.group(1)) if units_match else 150.0
+    units_consumed = float(units_match.group(1)) if units_match else None
 
     # 6. Total Amount
     amount_match = re.search(r"(?:Net\s*Payable\s*Amount|Net\s*Payable|Net\s*Amount|Payable\s*Amount|Total\s*Payable|Amount\s*Due|Bill\s*Amount)[\s\.:-]*\s*(?:₹|Rs\.?)?\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
-    total_amount = float(amount_match.group(1)) if amount_match else 950.00
+    total_amount = float(amount_match.group(1)) if amount_match else None
 
     # 7. Reading Status
     reading_status = "ACTUAL"
@@ -179,6 +188,13 @@ def parse_generic_bill(text: str, detected_provider: str) -> Dict[str, Any]:
         "rebate": rebate
     }
 
+    if not results["consumer_id"]:
+        raise ValueError("Could not extract Consumer ID from the bill.")
+    if results["units_consumed"] is None:
+        raise ValueError("Could not extract Units Consumed from the bill.")
+    if results["total_amount"] is None:
+        raise ValueError("Could not extract Total Amount from the bill.")
+
     results["consumer_no"] = results["consumer_id"]
     results["bill_month"] = results["billing_period"]
     results["is_estimated"] = results["reading_status"].upper() == "ESTIMATED"
@@ -198,26 +214,12 @@ def parse_wbsedcl_bill(file_path: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"Error reading PDF with pdfplumber: {e}")
 
-    # Fallback if the PDF is unreadable or empty (scanned image)
+    # Check if the PDF is unreadable or empty (scanned image)
     if not text.strip():
-        return {
-            "provider": "WBSEDCL",
-            "consumer_id": "998877665",
-            "consumer_no": "998877665",
-            "customer_id": "",
-            "consumer_name": "Valued Consumer (Scanned Document)",
-            "billing_period": "Current Cycle 2026",
-            "bill_month": "Current Cycle 2026",
-            "units_consumed": 240.0,
-            "total_amount": 1625.00,
-            "reading_status": "ACTUAL",
-            "due_date": "25-06-2026",
-            "is_estimated": False,
-            "billed_months": 3,
-            "meter_reading": None,
-            "adjustments": 0.0,
-            "rebate": 0.0
-        }
+        raise ValueError(
+            "The uploaded file appears to be a scanned image or contains no readable text. "
+            "Image parsing is currently not supported. Please upload an original digital PDF bill."
+        )
 
     # 1. Check for CESC signature
     if "CESC" in text.upper():
@@ -252,7 +254,7 @@ def parse_wbsedcl_bill(file_path: str) -> Dict[str, Any]:
     if "WBSEDCL" in text_upper or "WEST BENGAL STATE ELECTRICITY" in text_upper:
         # Standard WBSEDCL parsing logic
         consumer_id_match = (
-            re.search(r"(?:Consumer\s*ID|Consumer\s*No|Consumer\s*Number|Con\s*ID)\s*[:\.-]?\s*(\d{9})", text, re.IGNORECASE) or
+            re.search(r"(?:Consumer\s*ID|Consumer\s*No|Consumer\s*Number|Con\s*ID)\s*[:\.-]?\s*(\d{9,12})", text, re.IGNORECASE) or
             re.search(r"\b\d{9}\b", text)
         )
         
@@ -265,19 +267,26 @@ def parse_wbsedcl_bill(file_path: str) -> Dict[str, Any]:
 
         results = {
             "provider": "WBSEDCL",
-            "consumer_id": consumer_id_match.group(1).strip() if (consumer_id_match and len(consumer_id_match.groups()) > 0) else (consumer_id_match.group(0).strip() if consumer_id_match else "102834756"),
+            "consumer_id": consumer_id_match.group(1).strip() if (consumer_id_match and len(consumer_id_match.groups()) > 0) else (consumer_id_match.group(0).strip() if consumer_id_match else None),
             "customer_id": "",
             "consumer_name": name_match.group(1).strip() if name_match else "Valued Consumer",
-            "billing_period": billing_period_match.group(1).strip() if billing_period_match else "April - May 2026",
-            "units_consumed": float(units_match.group(1)) if units_match else 185.0,
-            "total_amount": float(amount_match.group(1)) if amount_match else 1250.00,
+            "billing_period": billing_period_match.group(1).strip() if billing_period_match else "Current Cycle",
+            "units_consumed": float(units_match.group(1)) if units_match else None,
+            "total_amount": float(amount_match.group(1)) if amount_match else None,
             "reading_status": reading_status_match.group(1).strip() if reading_status_match else "ACTUAL",
-            "due_date": due_date_match.group(1).strip() if due_date_match else "30-06-2026",
+            "due_date": due_date_match.group(1).strip() if due_date_match else None,
             "billed_months": 3,
             "meter_reading": None,
             "adjustments": 0.0,
             "rebate": 0.0
         }
+
+        if not results["consumer_id"]:
+            raise ValueError("Could not extract Consumer ID from the WBSEDCL bill.")
+        if results["units_consumed"] is None:
+            raise ValueError("Could not extract Units Consumed from the WBSEDCL bill.")
+        if results["total_amount"] is None:
+            raise ValueError("Could not extract Total Amount from the WBSEDCL bill.")
 
         if results["consumer_name"]:
             results["consumer_name"] = results["consumer_name"].split('\n')[0].strip()
