@@ -263,14 +263,18 @@ async def seed_offices_if_empty():
     if db is None:
         print("Database not connected yet, skipping office seeding.")
         return
-    count = await db["offices"].count_documents({})
-    if count != len(SEED_OFFICES):
-        print(f"Syncing offices collection: DB count ({count}) != local size ({len(SEED_OFFICES)}). Syncing...")
-        await db["offices"].delete_many({})
-        await db["offices"].insert_many(SEED_OFFICES)
-        print(f"Successfully seeded/synchronized {len(SEED_OFFICES)} offices.")
-    else:
-        print(f"Offices collection already seeded and up-to-date ({count} records).")
+    try:
+        count = await db["offices"].count_documents({})
+        if count != len(SEED_OFFICES):
+            print(f"Syncing offices collection: DB count ({count}) != local size ({len(SEED_OFFICES)}). Syncing...")
+            await db["offices"].delete_many({})
+            await db["offices"].insert_many(SEED_OFFICES)
+            print(f"Successfully seeded/synchronized {len(SEED_OFFICES)} offices.")
+        else:
+            print(f"Offices collection already seeded and up-to-date ({count} records).")
+    except Exception as e:
+        print(f"⚠️ DATABASE CONNECTION WARNING: Could not seed/sync offices on startup. Error: {e}")
+        print("Please check that MONGODB_URL is configured correctly in Render environment variables and that your MongoDB Atlas cluster whitelists all incoming connections (0.0.0.0/0).")
 
 
 @router.get("/public", response_model=List[dict])
