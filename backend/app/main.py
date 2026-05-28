@@ -16,6 +16,7 @@ _allowed_origins = [
     "https://loksetu-5d56c.web.app",
     "https://wbsedcl-bill-analyzer.web.app",
     "https://wbsedcl-bill-analyzer.firebaseapp.com",
+    "https://bill-analyzer-hinc.vercel.app",
 ]
 if _frontend_url and _frontend_url not in _allowed_origins:
     _allowed_origins.append(_frontend_url)
