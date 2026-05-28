@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, Mail, Phone, Shield, LogOut, CheckCircle2, Loader2, AlertCircle, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api from '../api';
 
 export default function Profile() {
   const { token, logout } = useAuth();
@@ -13,12 +14,9 @@ export default function Profile() {
 
   useEffect(() => {
     if (!token) { setTimeout(() => { setLoading(false); setError('Not authenticated'); }, 0); return; }
-    fetch('http://localhost:8000/api/v1/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => { if (!r.ok) throw new Error('Failed to fetch profile'); return r.json(); })
-      .then(d => setProfile(d))
-      .catch(e => setError(e.message))
+    api.get('/api/v1/auth/me')
+      .then(res => setProfile(res.data))
+      .catch(e => setError(e.response?.data?.detail || e.message))
       .finally(() => setLoading(false));
   }, [token]);
 

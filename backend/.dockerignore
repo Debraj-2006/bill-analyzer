@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.example
+.git/
+scratch/
+*.txt.bak
+debug_*.py
+test_*.py
+inspect_*.py
+trigger_*.py
+run.py
+supabase_schema.sql
+extracted_cesc_text.txt
