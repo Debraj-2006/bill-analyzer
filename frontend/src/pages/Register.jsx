@@ -1,4 +1,4 @@
-// src/pages/Register.jsx — Simplified single-step registration (OTP removed for now)
+// src/pages/Register.jsx — Simplified single-step registration
 
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';

@@ -59,9 +59,8 @@ KEY FEATURES (explain these when users ask "what does this website do" or "featu
    - Quick links to re-analyze or dispute any past bill
 
 🔐 AUTH (pages: /login, /register)
-   - Secure registration with email + phone verification via OTP
+   - Secure registration with email, password, phone, and district
    - JWT-based session management
-   - Phone number verified via Twilio SMS OTP
 
 🤖 BILLBOT (this chat — page: /chat)
    - AI assistant for all WBSEDCL queries
@@ -165,7 +164,7 @@ def get_fallback_response(user_message: str) -> str:
     # Upload / how to start
     if any(w in msg for w in ["upload", "how to start", "get started", "begin", "start"]):
         return ("📤 **How to get started:**\n\n"
-                "1. **Register** with your email & verify your phone via OTP\n"
+                "1. **Register** a free account and log in\n"
                 "2. Go to **Upload Bill** in the top menu\n"
                 "3. Upload your WBSEDCL bill (PDF or image)\n"
                 "4. Our AI analyzes it in seconds and shows a full audit report\n"

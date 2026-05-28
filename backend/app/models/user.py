@@ -26,19 +26,8 @@ class Token(BaseModel):
     token_type: str
 
 
-class OTPRequest(BaseModel):
-    email: EmailStr
-    purpose: str = "register"  # "register" or "login"
-
-
-class OTPVerify(BaseModel):
-    email: EmailStr
-    otp: str
-    purpose: str = "register"  # "register" or "login"
-
-
 class LoginRecord(BaseModel):
     user_id: str  # Email
-    login_method: str  # "email" or "otp"
+    login_method: str  # "email" or "sso_loksetu"
     timestamp: str
     ip_address: Optional[str] = None

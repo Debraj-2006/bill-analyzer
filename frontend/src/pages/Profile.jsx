@@ -114,7 +114,7 @@ export default function Profile() {
                 label="Registered Phone"
                 value={formatPhone(profile.mobile_number) || 'Not added'}
                 valueColor={profile.mobile_number ? 'text-white' : 'text-slate-500'}
-                badge={profile.mobile_number ? { text: 'OTP Verified', color: 'text-emerald-500', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30' } : null}
+                badge={profile.mobile_number ? { text: 'Verified', color: 'text-emerald-500', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30' } : null}
               />
             </div>
           </div>

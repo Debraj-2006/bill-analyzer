@@ -16,16 +16,10 @@ services:
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: 30
-      - key: OTP_EXPIRE_MINUTES
-        value: 5
       # SECRET KEYS — fill these in on the Render dashboard:
       - key: MONGODB_URL
         sync: false          # marks it as secret — enter value in dashboard
       - key: SECRET_KEY
-        sync: false
-      - key: GMAIL_USER
-        sync: false
-      - key: GMAIL_APP_PASSWORD
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
