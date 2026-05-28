@@ -1,80 +1,138 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShieldCheck, AlertCircle, Zap, Loader2, Sparkles } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Zap, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-// ─── Backend SSO verification ────────────────────────────────────────────────
-// Send the SSO details to the backend to get a real signed JWT.
-// ────────────────────────────────────────────────────────────────────────────
+// ─── Stage-based SSO verification ─────────────────────────────────────────────
+// Progress is tied to actual backend response lifecycle, not a fake timer.
+// ──────────────────────────────────────────────────────────────────────────────
+
+const STAGES = {
+  initiating:  { label: 'VALIDATING PARAMETERS',       target: 15  },
+  verifying:   { label: 'AUTHENTICATING WITH SERVER',   target: 45  },
+  coldWait:    { label: 'WAKING UP SECURE ENGINES',     target: 60  },
+  syncing:     { label: 'SYNCHRONIZING PROFILE',        target: 85  },
+  redirecting: { label: 'PREPARING DASHBOARD',          target: 100 },
+};
 
 export default function SSO() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { login } = useAuth();
+
   const [error, setError] = useState('');
+  const [stage, setStage] = useState('initiating');
   const [progress, setProgress] = useState(0);
   const [ssoUser, setSsoUser] = useState(null);
+  const [verified, setVerified] = useState(false);
+  const [statusHint, setStatusHint] = useState('Parsing LokSetu security token...');
+  const coldTimerRef = useRef(null);
 
   const email = searchParams.get('email');
-  const name = searchParams.get('name') || 'Citizen';
+  const name  = searchParams.get('name') || 'Citizen';
   const phone = searchParams.get('phone') || '';
   const timestamp = searchParams.get('timestamp');
-  const hash = searchParams.get('hash');
+  const hash  = searchParams.get('hash');
 
   useEffect(() => {
     if (name) setSsoUser(name);
   }, [name]);
 
+  // ── Smooth progress animation toward the current stage target ──────────────
   useEffect(() => {
+    const target = STAGES[stage]?.target ?? 0;
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) { clearInterval(interval); return 100; }
-        return prev + 5;
+        if (prev >= target) { clearInterval(interval); return target; }
+        // Ease toward target: faster when far, slower when close
+        const step = Math.max(1, Math.round((target - prev) * 0.18));
+        return Math.min(prev + step, target);
       });
-    }, 70);
+    }, 120);
     return () => clearInterval(interval);
-  }, []);
+  }, [stage]);
 
+  // ── Main SSO lifecycle ─────────────────────────────────────────────────────
   useEffect(() => {
     const performSSO = async () => {
+      // ── Stage 1: Validate parameters ────────────────────────────────────────
+      setStage('initiating');
+      setStatusHint('Parsing LokSetu security token...');
+
       if (!email || !name || !timestamp || !hash) {
-        setError('Missing SSO parameters in URL.');
+        setError('Missing SSO parameters in URL. Please try the link from LokSetu again.');
         return;
       }
 
+      // Small delay so user sees Stage 1
+      await new Promise((r) => setTimeout(r, 600));
+
+      // ── Stage 2: Call backend ───────────────────────────────────────────────
+      setStage('verifying');
+      setStatusHint('Validating LokSetu security signature...');
+
+      // Start a cold-start timer: if request takes >4s, show a helpful hint
+      coldTimerRef.current = setTimeout(() => {
+        setStage('coldWait');
+        setStatusHint('Waking up secure analytical engines — this may take up to 45 seconds on first boot...');
+      }, 4000);
+
       try {
-        // ── 1. Call Backend SSO Endpoint ───────────────────────────────────────
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
         const response = await fetch(`${apiUrl}/api/v1/auth/sso-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, name, phone, timestamp, hash })
+          body: JSON.stringify({ email, name, phone, timestamp, hash }),
         });
+
+        // Clear the cold-start timer since we got a response
+        if (coldTimerRef.current) clearTimeout(coldTimerRef.current);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          setError(errorData.detail || 'SSO authentication failed on the server.');
+          const detail = typeof errorData.detail === 'string'
+            ? errorData.detail
+            : Array.isArray(errorData.detail)
+              ? errorData.detail.map((d) => d.msg).join(', ')
+              : 'SSO authentication failed on the server.';
+          setError(detail);
           return;
         }
 
         const data = await response.json();
-        
-        // ── 2. Log in with the real backend JWT ────────────────────────────────
-        login(data.access_token);
 
-        // ── 4. Redirect after the animation finishes ─────────────────────────
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1800);
+        // ── Stage 3: Sync session ─────────────────────────────────────────────
+        setStage('syncing');
+        setStatusHint('Synchronizing your profile and bill databases...');
+        login(data.access_token);
+        setVerified(true);
+
+        // Let syncing animation breathe for a moment
+        await new Promise((r) => setTimeout(r, 900));
+
+        // ── Stage 4: Redirect ─────────────────────────────────────────────────
+        setStage('redirecting');
+        setStatusHint('Redirecting to your dashboard...');
+
+        await new Promise((r) => setTimeout(r, 800));
+        navigate('/dashboard', { replace: true });
 
       } catch (err) {
+        if (coldTimerRef.current) clearTimeout(coldTimerRef.current);
         console.error('SSO error:', err);
-        setError('SSO authentication failed. Please login manually.');
+        setError('Could not connect to Bill Analyzer server. Please check your connection or try logging in manually.');
       }
     };
 
     performSSO();
-  }, [searchParams, login, navigate, email, name, phone, timestamp, hash]);
+
+    return () => {
+      if (coldTimerRef.current) clearTimeout(coldTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const currentLabel = STAGES[stage]?.label || 'PROCESSING';
 
   return (
     <div className="flex justify-center items-center min-h-[90vh] px-4 relative overflow-hidden bg-slate-950">
@@ -132,25 +190,38 @@ export default function SSO() {
                 Welcome back, {ssoUser}!
               </h2>
               <p className="text-slate-400 max-w-sm mx-auto text-sm leading-relaxed">
-                We are securely synchronizing your profile details and bill databases.
+                {statusHint}
               </p>
             </div>
 
-            {/* Verification Tag */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900/60 rounded-xl border border-slate-800 mx-auto text-xs text-emerald-400">
-              <ShieldCheck size={16} className="text-emerald-400 shrink-0 animate-bounce" />
-              <span>Verified SSO Handshake Complete</span>
+            {/* Verification Tag — only shows after real backend success */}
+            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border mx-auto text-xs transition-all duration-500 ${
+              verified
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : 'bg-slate-900/60 border-slate-800 text-slate-500'
+            }`}>
+              {verified ? (
+                <>
+                  <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                  <span>Verified SSO Handshake Complete</span>
+                </>
+              ) : (
+                <>
+                  <Loader2 size={16} className="shrink-0 animate-spin" />
+                  <span>Verifying SSO handshake...</span>
+                </>
+              )}
             </div>
 
             {/* Animated Progress Bar */}
             <div className="space-y-2 max-w-sm mx-auto pt-2">
               <div className="flex justify-between text-xs text-slate-500 font-mono">
-                <span>PREPARING DASHBOARD</span>
+                <span>{currentLabel}</span>
                 <span>{progress}%</span>
               </div>
               <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800/80">
                 <div 
-                  className="h-full bg-gradient-to-r from-amber-500 to-indigo-500 rounded-full transition-all duration-70 ease-out"
+                  className="h-full bg-gradient-to-r from-amber-500 to-indigo-500 rounded-full transition-all duration-300 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -158,7 +229,7 @@ export default function SSO() {
 
             <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-medium pt-2 border-t border-slate-900/60 max-w-xs mx-auto">
               <Loader2 className="animate-spin text-slate-500" size={14} />
-              <span>Redirecting to Bill Analyzer...</span>
+              <span>{stage === 'redirecting' ? 'Launching dashboard...' : 'Redirecting to Bill Analyzer...'}</span>
             </div>
           </div>
         )}
