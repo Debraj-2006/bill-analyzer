@@ -20,8 +20,12 @@ export default function Login() {
 
   useEffect(() => {
     const handleMessage = async (event) => {
-      // Security check: only accept messages from our allowed LokSetu origins
-      const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://loksetu-5d56c.web.app'];
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'https://loksetu-5d56c.web.app',
+        import.meta.env.VITE_LOKSETU_URL
+      ].filter(Boolean);
       if (!allowedOrigins.includes(event.origin)) return;
 
       const { data } = event;
@@ -58,7 +62,7 @@ export default function Login() {
     const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const loksetuUrl = isLocalHost
       ? 'http://localhost:5173'
-      : 'https://loksetu-5d56c.web.app';
+      : (import.meta.env.VITE_LOKSETU_URL || 'https://loksetu-5d56c.web.app');
     window.location.href = `${loksetuUrl}/sso-redirect?return_url=` + encodeURIComponent(window.location.origin + '/sso');
   };
 
@@ -186,7 +190,7 @@ export default function Login() {
       <iframe
         src={window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
           ? 'http://localhost:5173/sso-silent'
-          : 'https://loksetu-5d56c.web.app/sso-silent'}
+          : `${import.meta.env.VITE_LOKSETU_URL || 'https://loksetu-5d56c.web.app'}/sso-silent`}
         style={{ display: 'none' }}
         title="LokSetu SSO Silent Check"
       />
