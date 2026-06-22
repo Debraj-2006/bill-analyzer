@@ -1,6 +1,6 @@
 // src/pages/ApplianceCalculator.jsx — Premium redesign with Chart, Tips & Solar ROI
-import { useState, useCallback } from 'react';
-import { Plus, Trash2, Calculator, Loader2, CheckCircle2, Zap, Save, Lightbulb, Sun, TrendingDown, Leaf, Sliders, Layers, Receipt, AlertTriangle } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Plus, Trash2, Calculator, Loader2, CheckCircle2, Zap, Save, Lightbulb, Sun, TrendingDown, Leaf, Sliders, Layers, Receipt, AlertTriangle, Clock, Play, History } from 'lucide-react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import api from '../api';
@@ -189,6 +189,50 @@ export default function ApplianceCalculator() {
   const [panelWatt,  setPanelWatt]  = useState(400);
   const [sunHours,   setSunHours]   = useState(5);
   const [costPerWatt,setCostPerWatt]= useState(50);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      const fetchHistory = async () => {
+        setLoadingHistory(true);
+        setHistoryError('');
+        try {
+          const res = await api.get('/api/v1/calculator/');
+          setHistory(res.data || []);
+        } catch (err) {
+          setHistoryError(err.response?.data?.detail || 'Failed to load history.');
+        } finally {
+          setLoadingHistory(false);
+        }
+      };
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const loadHistory = (item) => {
+    const loaded = item.appliances.map((a, i) => ({
+      id: nextId++,
+      name: a.name,
+      wattage: a.wattage,
+      hoursPerDay: a.hours_per_day,
+      daysPerMonth: a.days_per_month,
+      color: PRESETS[i % PRESETS.length]?.color || '#818cf8'
+    }));
+    setAppliances(loaded);
+    setActiveTab('bill');
+  };
+
+  const deleteHistory = async (id) => {
+    if (!confirm('Delete this saved calculation?')) return;
+    try {
+      await api.delete(`/api/v1/calculator/${id}`);
+      setHistory(prev => prev.filter(item => item._id !== id));
+    } catch (err) {
+      alert('Failed to delete calculation.');
+    }
+  };
 
   const totalKWh = appliances.reduce((sum, a) => {
     return sum + ((parseFloat(a.wattage)||0) * (parseFloat(a.hoursPerDay)||0) * (parseFloat(a.daysPerMonth)||0)) / 1000;
@@ -293,6 +337,7 @@ export default function ApplianceCalculator() {
           { id:'bill',  label:'⚡ Bill Calculator', },
           { id:'solar', label:'☀️ Solar ROI', },
           { id:'sandbox', label:'📊 Slab Sandbox', },
+          { id:'history', label:'📚 History', },
         ].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
             padding:'0.5rem 1.4rem', borderRadius:'0.75rem', border:'none', cursor:'pointer',
@@ -956,6 +1001,67 @@ export default function ApplianceCalculator() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── History Panel ── */}
+      {activeTab === 'history' && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <h2 style={{ color:'#fff', fontWeight:700, fontSize:'1.25rem', marginBottom:'1.5rem', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+            <History size={20} color="#818cf8" /> Saved Calculations
+          </h2>
+          
+          {loadingHistory ? (
+            <div style={{ display:'flex', justifyContent:'center', padding:'3rem', color:'#94a3b8' }}>
+              <Loader2 className="animate-spin" size={32} />
+            </div>
+          ) : historyError ? (
+            <div style={{ padding:'2rem', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:'1rem', textAlign:'center' }}>
+              <AlertTriangle size={32} color="#f87171" style={{ margin:'0 auto 1rem' }} />
+              <p style={{ color:'#f87171', fontWeight:600 }}>{historyError}</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div style={{ padding:'3rem', background:'rgba(15,23,42,0.6)', border:'1px solid rgba(71,85,105,0.3)', borderRadius:'1rem', textAlign:'center' }}>
+              <Save size={48} color="#475569" style={{ margin:'0 auto 1rem' }} />
+              <p style={{ color:'#94a3b8', fontSize:'1rem' }}>No saved calculations yet.</p>
+              <p style={{ color:'#64748b', fontSize:'0.8rem', marginTop:'0.5rem' }}>Save a calculation from the Bill Calculator tab to see it here.</p>
+            </div>
+          ) : (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'1.25rem' }}>
+              {history.map((item) => (
+                <div key={item._id} style={{ background:'rgba(15,23,42,0.75)', border:'1px solid rgba(71,85,105,0.4)', borderRadius:'1.25rem', padding:'1.5rem', backdropFilter:'blur(20px)', position: 'relative' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'1rem' }}>
+                    <div>
+                      <p style={{ color:'#94a3b8', fontSize:'0.75rem', marginBottom:'0.25rem' }}>
+                        {new Date(item.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                      </p>
+                      <h3 style={{ color:'#fff', fontWeight:800, fontSize:'1.25rem' }}>
+                        ₹{item.estimated_monthly_cost?.toLocaleString('en-IN', { maximumFractionDigits: 0 }) || '0'} <span style={{ fontSize:'0.8rem', fontWeight:500, color:'#64748b' }}>/mo</span>
+                      </h3>
+                    </div>
+                    <button onClick={() => deleteHistory(item._id)} style={{ padding:'0.5rem', background:'rgba(239,68,68,0.1)', color:'#f87171', borderRadius:'0.5rem', border:'1px solid rgba(239,68,68,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Delete">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  
+                  <div style={{ display:'flex', gap:'1rem', marginBottom:'1.5rem' }}>
+                    <div style={{ flex:1, background:'rgba(71,85,105,0.15)', padding:'0.75rem', borderRadius:'0.75rem' }}>
+                      <p style={{ color:'#64748b', fontSize:'0.7rem', marginBottom:'0.15rem' }}>Total Units</p>
+                      <p style={{ color:'#38bdf8', fontWeight:700 }}>{item.total_estimated_units?.toFixed(1) || 0} kWh</p>
+                    </div>
+                    <div style={{ flex:1, background:'rgba(71,85,105,0.15)', padding:'0.75rem', borderRadius:'0.75rem' }}>
+                      <p style={{ color:'#64748b', fontSize:'0.7rem', marginBottom:'0.15rem' }}>Appliances</p>
+                      <p style={{ color:'#a78bfa', fontWeight:700 }}>{item.appliances?.length || 0} items</p>
+                    </div>
+                  </div>
+                  
+                  <button onClick={() => loadHistory(item)} className="btn-primary hover-lift" style={{ width:'100%', padding:'0.75rem', display:'flex', justifyContent:'center', alignItems:'center', gap:'0.5rem', background:'rgba(99,102,241,0.1)', color:'#818cf8', border:'1px solid rgba(99,102,241,0.3)' }}>
+                    <Play size={16} /> Load Calculation
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
