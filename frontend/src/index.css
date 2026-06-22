@@ -188,6 +188,8 @@
     color: var(--text-primary);
     font-size: 0.875rem;
     transition: all 0.2s;
+    width: 100%;
+    min-width: 0;
   }
 
   .glass-input::placeholder {

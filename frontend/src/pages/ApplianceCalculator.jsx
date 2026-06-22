@@ -243,8 +243,8 @@ export default function ApplianceCalculator() {
           hours_per_day: parseFloat(hoursPerDay)||0,
           days_per_month: parseFloat(daysPerMonth)||30,
         })),
-        total_kwh: totalKWh,
-        estimated_bill: bill?.total || 0,
+        total_estimated_units: totalKWh,
+        estimated_monthly_cost: bill?.total || 0,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
